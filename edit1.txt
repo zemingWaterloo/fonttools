@@ -1,0 +1,23 @@
+handling of IF_ELSE blocks does not work,because:
+
+1. line 1202,  when handling IF instruction, unexpected environment restoration
+ to IF. This causes crushes in some cases.
+
+2. line 1219,  when handlign an if-else block, the EIF instruction is visited
+ twice.The code merges the 2 environment when handling EIF for the second time. This causes crush for IF-mode. and for ELSE-mode,this is not necessssary
+
+3. line 1280,  unexpected environment merge,if this part is working properly, (2) should not do the repeat job
+
+4. line 1286,  unexpected environment restoration
+
+5. line 1301,  the block of code handling the exiting of if-else block is
+   moved to here,it will not be ever called before
+
+6. line 1320,  add code which assign the current_instruction to proper one
+   when quiting if block/the whole if-else block, the program would stuck 
+   there before
+
+7. line 291,   append intermediate code for IF/ELSE/EIF , it printed nothing before
+
+
+8.  add 10 more tests for if-else

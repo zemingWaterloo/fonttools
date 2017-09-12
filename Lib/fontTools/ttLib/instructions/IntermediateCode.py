@@ -587,6 +587,9 @@ class JROxStatement(object):
         d = "self" if self == self.inst_dest else str(self.inst_dest)
         return "%s (%s, %s)" % (op, self.e, d)
 
+## in IfElseBlock, __str__ function is never been called,
+## I will use this code to print the IR for if/else blocks
+## I revised indent before If slightly
 class IfElseBlock(object):
     def __init__(self, condition = None, nesting_level = 1):
         self.condition = condition
@@ -606,21 +609,27 @@ class IfElseBlock(object):
         c = self.condition.eval(True)
         if isinstance(c, dataType.UncertainValue):
             c = self.condition
-        res_str = 'if ('+str(c)+') {\n'
+        res_str = (self.nesting_level-1)*4*' '+'if ('+str(c)+') {\n'
         for inst in self.if_branch:
             if inst in self.jump_targets:
                 res_str += "%s:" % self.jump_targets[inst] + '\n'
             if hasattr(inst, 'jump_targets'):
-                inst.jump_targets = jump_targets
-            res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
+               inst.jump_targets = self.jump_targets
+	    if isinstance(inst,IfElseBlock):
+            	res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+        #res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+	    else:
+                res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
         res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+
+
         if len(self.else_branch) > 0:
             res_str += ' else {\n'
             for inst in self.else_branch:
                 if inst in self.jump_targets:
                     res_str += "%s:" % self.jump_targets[inst] + '\n'
                 if hasattr(inst, 'jump_targets'):
-                    inst.jump_targets = jump_targets
+                    inst.jump_targets = self.jump_targets
                 res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
             res_str += (self.nesting_level-1) * 4 * ' ' + '}'
         return res_str

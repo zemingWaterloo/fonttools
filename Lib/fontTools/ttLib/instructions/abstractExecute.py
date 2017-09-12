@@ -93,6 +93,7 @@ class Environment(object):
             else:
                 new_stack.append(dataType.UncertainValue([v1, v2]))
         self.program_stack = new_stack
+	print self.program_stack
 
         for item in environment2.storage_area:
             if item not in self.storage_area:
@@ -289,12 +290,11 @@ class Environment(object):
     ## I add this for Intermediate code of IF/ELSE/EIF, for they are just strings,could be modified later 
     ## Statement Objects later
     def exec_IF(self):
-        self.current_instruction_intermediate.append('IF')
- 
+	pass 
     def exec_EIF(self):
-        self.current_instruction_intermediate.append('EIF')
+        pass
     def exec_ELSE(self):
-        self.current_instruction_intermediate.append('ELSE');
+        pass
     def exec_ENDF(self):
         self.current_instruction_intermediate.append(IR.ReturnStatement())
 
@@ -1078,8 +1078,13 @@ class Executor(object):
         else:
             intermediateCodes = []
             for inst in self.bytecodeContainer.function_table[callee].instructions:
+		## If this instruction is IF, append the corresponding IR.IF_ELSE_BLOCK to IntermediateCodes
                 if inst not in self.ignored_insts:
-                    intermediateCodes.extend(self.bytecode2ir[inst.id])
+		    if inst.mnemonic == 'IF':
+			intermediateCodes.append(inst.If_Else_Block)
+		    else:
+                    	intermediateCodes.extend(self.bytecode2ir[inst.id])
+		
             self.bytecodeContainer.IRs[tag_returned_from] = self.fixupDestsToIR(intermediateCodes)
         self.visited_functions.add(tag_returned_from)
 
@@ -1154,6 +1159,7 @@ class Executor(object):
         self.environment.minimum_stack_depth = 0
 
         while self.current_instruction is not None:
+	    print self.environment.program_stack
             logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.environment.program_stack))))
             if self.current_instruction.data is not None:
                 logger.info("[pc] %s->%s|%s",self.current_instruction.id, self.current_instruction.mnemonic,map(lambda x:x.value, self.current_instruction.data))
@@ -1189,7 +1195,8 @@ class Executor(object):
                     is_reexecuting = True
                     if self.if_else_stack[-1].state+1 == len(self.current_instruction.successors):
                         # no more branches
-                        self.environment = copy.deepcopy(self.if_else_stack[-1].env_on_exit)
+			## dont restore the environemnt to env_on_exit here
+                        #self.environment = copy.deepcopy(self.if_else_stack[-1].env_on_exit)
                         store_env = False
                         logger.info("entering if block (getting out) for %s@%s, stack height is %d" % (str(cond), self.current_instruction.id, len(self.environment.program_stack)))
                     else:
@@ -1207,6 +1214,7 @@ class Executor(object):
                     logger.info("entering if block (first time) for %s, stack height is %d" % (str(cond), self.stack_depth()))
                     newBlock = IR.IfElseBlock(cond,
                                               len(self.if_else_stack) + 1)
+		    self.current_instruction.If_Else_Block = newBlock
 
                     self.if_else_stack.append(self.If_else_stack(newBlock, self.current_instruction, 0))
             elif self.current_instruction.mnemonic == 'ELSE':
@@ -1223,7 +1231,7 @@ class Executor(object):
                      is_reexecuting = True
                 else:
                     self.stored_environments[self.current_instruction.id] = copy.deepcopy(self.environment)
-            
+           
 	    if self.current_instruction.mnemonic == 'JROT' or self.current_instruction.mnemonic == 'JROF' or self.current_instruction.mnemonic == 'JMPR':
                 if self.current_instruction.mnemonic == 'JROT' or self.current_instruction.mnemonic == 'JROF':
                     e = self.environment.program_stack_pop().eval(self.environment.keep_abstract)
@@ -1279,11 +1287,13 @@ class Executor(object):
 			## 'ELSE' for ELSE mode, or the first time of 'EIF' for IF mode correspondingly 
 		       	if  self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors):
                             self.if_else_stack[-1].env_on_exit.merge(self.environment)
+			    #self.environment.merge(self.if_else_stack[-1].env_on_exit)
+
 
 			## restore the environement to corresponding IF instruction,only if first time executing 
 			## ELSE for ELSE mode,or the first time of 'EIF' for IF mode correspondingly, the previous
 			## code did this for all situation except for the ones just mentioned
-		        elif self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors)-2:   
+		    if self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors)-2:   
                       	  	self.environment = copy.deepcopy(self.stored_environments[self.if_else_stack[-1].if_stmt.id])
                       	        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (self.if_else_stack[-1].if_stmt.id, self.if_else_stack[-1].if_stmt.mnemonic, len(self.environment.program_stack)))
                 else:
@@ -1307,14 +1317,35 @@ class Executor(object):
                              s = self.if_else_stack.pop()
                              block = s.IR
                              for inst in block.if_instructions:
-                                 block.if_branch.extend(self.bytecode2ir[inst.id])
-                                 #self.ignored_insts.add(inst)
+				 ## An IF instruction should not be in the ignored list
+				 ## or the whole If_Else_Block will not show up in the intermediate code
+				 if inst.mnemonic == 'IF':
+					if(inst.id != s.if_stmt.id):
+					   block.if_branch.append(inst.If_Else_Block)
+				 else:
+					block.if_branch.extend(self.bytecode2ir[inst.id])
+				 if inst.id != s.if_stmt.id:
+                                 	self.ignored_insts.add(inst)
+
                              for inst in block.else_instructions:
-                                 block.else_branch.extend(self.bytecode2ir[inst.id])
-                                 #self.ignored_insts.add(inst)
+				 print 'inst:' , inst
+				 if inst.mnemonic == 'IF':
+					block.else_branch.append(inst.If_Else_Block)
+				 else:
+                                 	block.else_branch.extend(self.bytecode2ir[inst.id])
+                                 self.ignored_insts.add(inst)
+
                              block.if_instructions = []
                              block.else_instructions = []
                              ir = [block]
+			     ## when poping off an if-else-block from the stack, if this is a nested one
+			     ## append its IR to the parent if/else block
+			     if len(self.if_else_stack)>0:
+				nested_block = self.if_else_stack[-1].IR
+				if nested_block.mode == 'ELSE':
+					nested_block.else_instructions.append(self.current_instruction)
+				else:
+					nested_block.if_instructions.append(self.current_instruction)
 			 ## add this in order to make the program keep going when quiting IF block and the whole IF
 			 ##_ELSE block
 			 self.current_instruction = self.current_instruction.successors[old_state-1].successors[0]
@@ -1349,7 +1380,7 @@ class Executor(object):
                     logger.info("leftovers if_else.env %d" % len(self.if_else_stack))
                     assert len(self.if_else_stack)==0
                     self.current_instruction = None
-        # ok, finished executing tag, now let's lift all of the IR into intermediateCodes
+	# ok, finished executing tag, now let's lift all of the IR into intermediateCodes
         intermediateCodes = self.graphics_state_initialization_code() if tag == 'prep' else []
 
         for inst in program.body.instructions:

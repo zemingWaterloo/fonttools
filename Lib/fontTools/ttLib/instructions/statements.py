@@ -417,6 +417,7 @@ class all():
             self.push_num =  0 
             self.pop_num =  1 
             self.total_num = -1
+	    self.IF_ELSE_BLOCK = None
     class INSTCTRL_Statement(root_statement):
         def __init__(self):
             root_statement.__init__(self) 

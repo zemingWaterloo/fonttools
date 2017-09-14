@@ -494,11 +494,14 @@ class Environment(object):
         else:
             return self.bytecodeContainer.tag_to_programs[self.tag].body
 
-    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic):
+    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack):
         only_succ = mnemonic == 'JMPR'
         # find the instructions and set the PC
         # returns (True, _) if we broke a cycle
         # also returns the jump successor
+
+	## The cross_list records the control flow instructions crossed 
+	cross_list = []
         assert not isinstance(arg, dataType.AbstractValue)
         ins = self.fetch_body_for_tag(self.tag).instructions
         pc = 0
@@ -520,6 +523,49 @@ class Environment(object):
                 ci_size += 2 if d.is_word else 1
             mag = mag - ci_size
             pc += dir
+	    ## catch the crossed control flow instructions
+	    crossing_instruction = ins[pc]
+	    if crossing_instruction.mnemonic == 'IF' or crossing_instruction.mnemonic == 'ELSE' or crossing_instruction.mnemonic == 'EIF':
+	    	cross_list.append(crossing_instruction)
+
+	if len(cross_list) > 0:
+		in_block = False
+		block_type = 'THEN'
+		in_branch = 'THEN'
+		if len(if_else_stack)>0:
+		   in_block = True
+		   current_block = if_else_stack[-1]
+		   if len(current_block.if_stmt.successors) == 3:
+			block_type = 'ELSE'
+		   if current_block.IR.mode == 'ELSE':
+			in_branch = 'ELSE'
+		   
+		for flow_control_inst in cross_list:
+		   print flow_control_inst,' of type ',type(flow_control_inst)
+		   if flow_control_inst.mnemonic == 'IF':
+			pass	
+			
+
+		   elif flow_control_inst.mnemonic == 'ELSE':
+			if dir == 1:
+			   if in_block:
+				if in_branch == 'THEN':
+				  current_block.if_stmt.successors[2].vest = flow_control_inst
+				  # set the vest of the EIF to be ELSE
+			else:
+			   if in_block:
+				if in_branch == 'ELSE':
+				  current_block.if_stmt.successors[1].vest = current_block.if_stmt.successors[2]
+				  # set the vest of ELSE to be EIF
+
+
+		   elif flow_control_inst.mnemonic == 'EIF':
+			pass
+		
+
+
+
+
         target = ins[pc]
         logger.info("     relative jump target is %s" % ins[pc])
 
@@ -1159,7 +1205,13 @@ class Executor(object):
         self.environment.minimum_stack_depth = 0
 
         while self.current_instruction is not None:
-	    print self.environment.program_stack
+	    if self.current_instruction.vest != None:
+		print 'vest = ',self.current_instruction.vest,'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+		tmp=self.current_instruction
+		self.current_instruction = self.current_instruction.vest
+		tmp.vest = None
+		
+
             logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.environment.program_stack))))
             if self.current_instruction.data is not None:
                 logger.info("[pc] %s->%s|%s",self.current_instruction.id, self.current_instruction.mnemonic,map(lambda x:x.value, self.current_instruction.data))
@@ -1238,7 +1290,7 @@ class Executor(object):
                 else:
                     e = None
                 dest = self.environment.program_stack_pop().eval(False)
-                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic)
+                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack)
                 logger.info("     adjusted succs now %s", self.current_instruction.successors)
                 if not is_reexecuting:
                     # first time round at this JROT/JROF statement...

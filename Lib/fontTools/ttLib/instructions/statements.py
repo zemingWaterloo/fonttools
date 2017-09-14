@@ -1,6 +1,7 @@
  # WARNING: do not modify; generated code! See generateStatements.py and ../tables/ttProgram.py
 class root_statement(object):
     def __init__(self):
+	self.vest = None
 	self.data = []
         #one instruction may have mutiple successors
         self.successors = [] 

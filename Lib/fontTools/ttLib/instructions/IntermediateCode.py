@@ -590,6 +590,32 @@ class JROxStatement(object):
 ## in IfElseBlock, __str__ function is never been called,
 ## I will use this code to print the IR for if/else blocks
 ## I revised indent before If slightly
+
+class LoopBlock(object):
+    def __init__(self,condition = None):
+	self.condition = condition
+        self.ir = []
+        self.instructions = []
+        self.jump_targets = {}
+    def __str__(self):
+        c = self.condition.eval(True)
+        if isinstance(c, dataType.UncertainValue):
+            c = self.condition
+        res_str = (self.nesting_level-1)*4*' '+'while ('+str(c)+') {\n'
+        for inst in self.instructions:
+            if inst in self.jump_targets:
+                res_str += "%s:" % self.jump_targets[inst] + '\n'
+            if hasattr(inst, 'jump_targets'):
+               inst.jump_targets = self.jump_targets
+            if isinstance(inst,IfElseBlock):
+                res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+        #res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+            else:
+                res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
+        res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+        return res_str
+
+
 class IfElseBlock(object):
     def __init__(self, condition = None, nesting_level = 1):
         self.condition = condition

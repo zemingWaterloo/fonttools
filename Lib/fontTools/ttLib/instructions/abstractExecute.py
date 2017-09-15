@@ -494,7 +494,7 @@ class Environment(object):
         else:
             return self.bytecodeContainer.tag_to_programs[self.tag].body
 
-    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack):
+    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack,ignored_insts):
         only_succ = mnemonic == 'JMPR'
         # find the instructions and set the PC
         # returns (True, _) if we broke a cycle
@@ -502,6 +502,7 @@ class Environment(object):
 
 	## The cross_list records the control flow instructions crossed 
 	cross_list = []
+        skip_list = []
         assert not isinstance(arg, dataType.AbstractValue)
         ins = self.fetch_body_for_tag(self.tag).instructions
         pc = 0
@@ -517,6 +518,7 @@ class Environment(object):
         else:
             dir = 1
             mag = abs(arg)
+	flag = 0
         while mag > 0:
             ci_size = 1
             for d in ins[pc].data:
@@ -525,9 +527,18 @@ class Environment(object):
             pc += dir
 	    ## catch the crossed control flow instructions
 	    crossing_instruction = ins[pc]
+
 	    if crossing_instruction.mnemonic == 'IF' or crossing_instruction.mnemonic == 'ELSE' or crossing_instruction.mnemonic == 'EIF':
 	    	cross_list.append(crossing_instruction)
+		if crossing_instruction.mnemonic == 'EIF':
+			flag = 1
+	    else:
+		if flag == 0:
+		    print crossing_instruction,'skip'
+		    skip_list.append(crossing_instruction)
+		
 
+	target = ins[pc]
 	if len(cross_list) > 0:
 		in_block = False
 		block_type = 'THEN'
@@ -543,7 +554,9 @@ class Environment(object):
 		for flow_control_inst in cross_list:
 		   print flow_control_inst,' of type ',type(flow_control_inst)
 		   if flow_control_inst.mnemonic == 'IF':
-			pass	
+			if dir == -1:
+			   if in_block:
+                               pass	
 			
 
 		   elif flow_control_inst.mnemonic == 'ELSE':
@@ -561,12 +574,14 @@ class Environment(object):
 
 		   elif flow_control_inst.mnemonic == 'EIF':
 			pass
+			if dir == 1:
+			   if in_block:
+			       target.vest = flow_control_inst
+			       for ignore in skip_list:
+				   ignored_insts.add(ignore)
 		
 
 
-
-
-        target = ins[pc]
         logger.info("     relative jump target is %s" % ins[pc])
 
         if only_succ:
@@ -1290,7 +1305,7 @@ class Executor(object):
                 else:
                     e = None
                 dest = self.environment.program_stack_pop().eval(False)
-                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack)
+                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack,self.ignored_insts)
                 logger.info("     adjusted succs now %s", self.current_instruction.successors)
                 if not is_reexecuting:
                     # first time round at this JROT/JROF statement...

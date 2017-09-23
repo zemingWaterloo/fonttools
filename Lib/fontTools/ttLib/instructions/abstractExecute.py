@@ -2,6 +2,7 @@ from fontTools.ttLib.data import dataType
 import logging
 import copy
 import IntermediateCode as IR
+import statements 
 
 class IdentifierGenerator(object):
     def generateIdentifier(self, tag, number):
@@ -494,7 +495,7 @@ class Environment(object):
         else:
             return self.bytecodeContainer.tag_to_programs[self.tag].body
 
-    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack,ignored_insts):
+    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack,ignored_insts,function_instructions_list):
         only_succ = mnemonic == 'JMPR'
         # find the instructions and set the PC
         # returns (True, _) if we broke a cycle
@@ -527,7 +528,7 @@ class Environment(object):
             pc += dir
 	    ## catch the crossed control flow instructions
 	    crossing_instruction = ins[pc]
-
+	    print crossing_instruction
 	    if crossing_instruction.mnemonic == 'IF' or crossing_instruction.mnemonic == 'ELSE' or crossing_instruction.mnemonic == 'EIF':
 	    	cross_list.append(crossing_instruction)
 		if crossing_instruction.mnemonic == 'EIF':
@@ -539,6 +540,7 @@ class Environment(object):
 		
 
 	target = ins[pc]
+	print 'target=',target
 	if len(cross_list) > 0:
 		in_block = False
 		block_type = 'THEN'
@@ -556,8 +558,34 @@ class Environment(object):
 		   if flow_control_inst.mnemonic == 'IF':
 			if dir == -1:
 			   if in_block:
-                               pass	
-			
+ 			       loop_stmt = statements.all.LOOP_Statement()
+			       loop_stmt.id = flow_control_inst.id
+                               endloop_stmt = statements.all.ENDLOOP_Statement()	
+			       loop = IR.LoopBlock(current_block.IR.condition)
+			       loop.nestring_level = flow_control_inst.If_Else_Block.nesting_level
+			       loop_stmt.LOOP_BLOCK = loop
+
+                               for i in range(1,len(current_block.IR.if_instructions)-1):
+                                        loop.instructions.append(current_block.IR.if_instructions[i])
+
+			       for i in range(1,len(skip_list)-len(current_block.IR.if_instructions)+2):
+					loop.instructions.append(skip_list[-i])
+
+
+   			       for i in range(0,len(loop.instructions)):
+					print 'loop:' , loop.instructions[i]
+					
+  			       endloop_stmt.successors.append(flow_control_inst.successors[len(flow_control_inst.successors)-1].successors[0])
+			       flow_control_inst.vest=endloop_stmt
+			       if_else_stack.pop()
+			       if_else_stack.append(loop)
+			       for index in range(0,len( function_instructions_list)):
+				  if function_instructions_list[index].id == flow_control_inst.id:
+                                       function_instructions_list[index]=loop_stmt			       
+
+	
+			       ignored_insts.add(current_instruction)
+			       ignored_insts.add(skip_list[0])
 
 		   elif flow_control_inst.mnemonic == 'ELSE':
 			if dir == 1:
@@ -594,6 +622,9 @@ class Environment(object):
             else:
                 return target
         return target
+
+    def exec_ENDLOOP(self):
+	pass
 
     def exec_JMPR(self):
         pass
@@ -1140,9 +1171,14 @@ class Executor(object):
             intermediateCodes = []
             for inst in self.bytecodeContainer.function_table[callee].instructions:
 		## If this instruction is IF, append the corresponding IR.IF_ELSE_BLOCK to IntermediateCodes
-                if inst not in self.ignored_insts:
+                if inst not in self.ignored_insts and inst.id in self.bytecode2ir:
+		    print 'in execute_RETURN ', inst.mnemonic
 		    if inst.mnemonic == 'IF':
 			intermediateCodes.append(inst.If_Else_Block)
+		    if inst.mnemonic == 'LOOP':
+			print 'loop found'
+			print inst.LOOP_BLOCK
+			intermediateCodes.append(inst.LOOP_BLOCK)
 		    else:
                     	intermediateCodes.extend(self.bytecode2ir[inst.id])
 		
@@ -1203,12 +1239,14 @@ class Executor(object):
             self.bytecode2ir[current_instruction.id] = ir
             self.already_seen_insts.add(current_instruction.id)
         if len(self.if_else_stack) > 0:
-            if_else_block = self.if_else_stack[-1].IR
-            if not already_seen_this_inst:
-                if if_else_block.mode == 'ELSE':
-                    if_else_block.else_instructions.append(current_instruction)
-                else:
-                    if_else_block.if_instructions.append(current_instruction)
+            if_else_block = self.if_else_stack[-1]
+	    if isinstance(if_else_block,self.If_else_stack):
+	       block=if_else_block.IR
+               if not already_seen_this_inst:
+                   if block.mode == 'ELSE':
+                       block.else_instructions.append(current_instruction)
+                   else:
+                       block.if_instructions.append(current_instruction)
 
     def execute(self, tag):
         logger.info("execute; tag is %s", tag)
@@ -1218,6 +1256,9 @@ class Executor(object):
 
         self.if_else_stack = []
         self.environment.minimum_stack_depth = 0
+
+
+
 
         while self.current_instruction is not None:
 	    if self.current_instruction.vest != None:
@@ -1289,6 +1330,10 @@ class Executor(object):
                 block = self.if_else_stack[-1].IR
                 block.mode = 'ELSE'
             
+
+            
+
+
 	    if store_env:
                 if not is_reexecuting and self.current_instruction.id in self.stored_environments:
 		    ## If the same EIF is pointed for the second time,the current env should not be merged with
@@ -1305,7 +1350,9 @@ class Executor(object):
                 else:
                     e = None
                 dest = self.environment.program_stack_pop().eval(False)
-                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack,self.ignored_insts)
+                callee=self.call_stack[-1][0]
+                instructions_list=self.bytecodeContainer.function_table[callee].instructions
+                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack,self.ignored_insts,instructions_list)
                 logger.info("     adjusted succs now %s", self.current_instruction.successors)
                 if not is_reexecuting:
                     # first time round at this JROT/JROF statement...
@@ -1363,6 +1410,22 @@ class Executor(object):
 		    if self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors)-2:   
                       	  	self.environment = copy.deepcopy(self.stored_environments[self.if_else_stack[-1].if_stmt.id])
                       	        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (self.if_else_stack[-1].if_stmt.id, self.if_else_stack[-1].if_stmt.mnemonic, len(self.environment.program_stack)))
+
+
+		elif self.current_instruction.mnemonic == 'ENDLOOP':
+		    assert len(self.if_else_stack) > 0
+		    block = self.if_else_stack.pop()
+		    print 'enter'
+	            for inst in block.instructions:
+			block.ir.extend(self.bytecode2ir[inst.id])
+			print 'block appending ir:',self.bytecode2ir[inst.id]
+			self.ignored_insts.add(inst)
+		    self.current_instruction = self.current_instruction.successors[0]
+
+
+
+		  
+
                 else:
                     self.current_instruction = self.current_instruction.successors[0]
                 
@@ -1372,7 +1435,7 @@ class Executor(object):
                     old_state = self.if_else_stack[-1].state
                     logger.info("traverse new branch old_state %d [%s] %s" % (old_state, self.current_instruction.id, self.current_instruction.mnemonic))
 		
-		    ##I remove this block to here,since when 'alts_count == self.if_else_stack[-1].state',
+		    ##I move this block to here,since when 'alts_count == self.if_else_stack[-1].state',
 		    ##the pointer is not at 'EIF',but 'IF'(last time) instead,so the previous will never pop
 		    ##the self.if_else_stack,and also will never append the IR code for IF_ELSE blocks.
 		    if  old_state == len(self.current_instruction.successors):

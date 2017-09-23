@@ -27,6 +27,30 @@ class root_statement(object):
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__.split("_")[0],map(lambda x:x.value, self.data))
 class all():
+
+    class ENDLOOP_Statement(root_statement):
+	def __init__(self):
+            root_statement.__init__(self)
+            self.opcode = -1
+            self.mnemonic = 'ENDLOOP'
+            self.name = 'EndLOOP'
+            self.push_num =  0
+            self.pop_num =  0
+            self.total_num = 0
+            self.LOOP = None
+
+    class LOOP_Statement(root_statement):
+        def __init__(self):
+            root_statement.__init__(self)
+            self.opcode = -1
+            self.mnemonic = 'LOOP'
+            self.name = 'LOOP'
+            self.push_num =  0
+            self.pop_num =  0
+            self.total_num = 0
+            self.LOOP_BLOCK = None
+
+
     class PUSH_Statement(root_statement):
         def __init__(self):
             root_statement.__init__(self)

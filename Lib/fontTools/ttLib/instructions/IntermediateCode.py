@@ -597,12 +597,14 @@ class LoopBlock(object):
         self.ir = []
         self.instructions = []
         self.jump_targets = {}
+        self.nesting_level = 1
     def __str__(self):
         c = self.condition.eval(True)
         if isinstance(c, dataType.UncertainValue):
             c = self.condition
-        res_str = (self.nesting_level-1)*4*' '+'while ('+str(c)+') {\n'
-        for inst in self.instructions:
+        res_str = (self.nesting_level-1)*4*' '+str(self.ir[-1])+'\n'
+        res_str += (self.nesting_level-1)*4*' '+'while ('+str(c)+') {\n'
+        for inst in self.ir:
             if inst in self.jump_targets:
                 res_str += "%s:" % self.jump_targets[inst] + '\n'
             if hasattr(inst, 'jump_targets'):

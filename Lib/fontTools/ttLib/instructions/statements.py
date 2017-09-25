@@ -37,6 +37,7 @@ class all():
             self.push_num =  0
             self.pop_num =  0
             self.total_num = 0
+	    self.loop_stmt = None
             self.LOOP = None
 
     class LOOP_Statement(root_statement):

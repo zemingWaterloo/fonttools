@@ -595,15 +595,24 @@ class LoopBlock(object):
     def __init__(self,condition = None):
 	self.condition = condition
         self.ir = []
+        self.if_ir = []
+        self.else_ir=[]
         self.instructions = []
+        self.if_instructions = []
+        self.else_instructions = []
         self.jump_targets = {}
         self.nesting_level = 1
+	self.statement_id = None
+        self.mode = 'THEN'
     def __str__(self):
         c = self.condition.eval(True)
         if isinstance(c, dataType.UncertainValue):
             c = self.condition
         res_str = (self.nesting_level-1)*4*' '+str(self.ir[-1])+'\n'
-        res_str += (self.nesting_level-1)*4*' '+'while ('+str(c)+') {\n'
+        if self.mode == 'IF':
+	    res_str += (self.nesting_level-1)*4*' '+'while ( not '+str(c)+' ) {\n'
+	else:
+            res_str += (self.nesting_level-1)*4*' '+'while ('+str(c)+') {\n'
         for inst in self.ir:
             if inst in self.jump_targets:
                 res_str += "%s:" % self.jump_targets[inst] + '\n'
@@ -615,6 +624,36 @@ class LoopBlock(object):
             else:
                 res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
         res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+	if self.mode == 'ELSE':
+	    res_str+='\n'+(self.nesting_level-1)*4*' '+'if (not '+ str(c)+'){\n'
+            for inst in self.else_ir:
+                if inst in self.jump_targets:
+                    res_str += "%s:" % self.jump_targets[inst] + '\n'
+                if hasattr(inst, 'jump_targets'):
+                   inst.jump_targets = self.jump_targets
+                if isinstance(inst,IfElseBlock):
+                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+                else:
+                    res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
+            res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+
+	if self.mode == 'IF':
+	   res_str+='\n'+(self.nesting_level-1)*4*' '+'if( ' +str(c)+' ){\n'
+           for inst in self.if_ir:
+                if inst in self.jump_targets:
+                    res_str += "%s:" % self.jump_targets[inst] + '\n'
+                if hasattr(inst, 'jump_targets'):
+                   inst.jump_targets = self.jump_targets
+                if isinstance(inst,IfElseBlock):
+                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+                else:
+                    res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
+           res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+
+
+
+
+
         return res_str
 
 

@@ -94,7 +94,6 @@ class Environment(object):
             else:
                 new_stack.append(dataType.UncertainValue([v1, v2]))
         self.program_stack = new_stack
-	print self.program_stack
 
         for item in environment2.storage_area:
             if item not in self.storage_area:
@@ -528,23 +527,22 @@ class Environment(object):
             pc += dir
 	    ## catch the crossed control flow instructions
 	    crossing_instruction = ins[pc]
-	    print crossing_instruction
 	    if crossing_instruction.mnemonic == 'IF' or crossing_instruction.mnemonic == 'ELSE' or crossing_instruction.mnemonic == 'EIF':
 	    	cross_list.append(crossing_instruction)
+		skip_list.append(crossing_instruction)
 		if crossing_instruction.mnemonic == 'EIF':
 			flag = 1
 	    else:
 		if flag == 0:
-		    print crossing_instruction,'skip'
 		    skip_list.append(crossing_instruction)
 		
 
 	target = ins[pc]
-	print 'target=',target
 	if len(cross_list) > 0:
 		in_block = False
 		block_type = 'THEN'
 		in_branch = 'THEN'
+
 		if len(if_else_stack)>0:
 		   in_block = True
 		   current_block = if_else_stack[-1]
@@ -552,10 +550,12 @@ class Environment(object):
 			block_type = 'ELSE'
 		   if current_block.IR.mode == 'ELSE':
 			in_branch = 'ELSE'
-		   
-		for flow_control_inst in cross_list:
-		   print flow_control_inst,' of type ',type(flow_control_inst)
-		   if flow_control_inst.mnemonic == 'IF':
+		
+
+   
+		for i in range(0,len(cross_list)):
+                   flow_control_inst = cross_list[i]
+		   if flow_control_inst.mnemonic == 'IF' and i==len(cross_list)-1:
 			if dir == -1:
 			   if in_block:
  			       loop_stmt = statements.all.LOOP_Statement()
@@ -564,30 +564,58 @@ class Environment(object):
 			       loop = IR.LoopBlock(current_block.IR.condition)
 			       loop.nestring_level = flow_control_inst.If_Else_Block.nesting_level
 			       loop_stmt.LOOP_BLOCK = loop
-
-                               for i in range(1,len(current_block.IR.if_instructions)-1):
+			       loop.statement_id = flow_control_inst.id
+			       if len(cross_list) == 1:
+                                   for i in range(1,len(current_block.IR.if_instructions)-1):
                                         loop.instructions.append(current_block.IR.if_instructions[i])
 
-			       for i in range(1,len(skip_list)-len(current_block.IR.if_instructions)+2):
+			           for i in range(1,len(skip_list)-len(current_block.IR.if_instructions)+2):
 					loop.instructions.append(skip_list[-i])
 
 
-   			       for i in range(0,len(loop.instructions)):
-					print 'loop:' , loop.instructions[i]
-					
-  			       endloop_stmt.successors.append(flow_control_inst.successors[len(flow_control_inst.successors)-1].successors[0])
-			       flow_control_inst.vest=endloop_stmt
-			       if_else_stack.pop()
-			       if_else_stack.append(loop)
-			       for index in range(0,len( function_instructions_list)):
-				  if function_instructions_list[index].id == flow_control_inst.id:
-                                       function_instructions_list[index]=loop_stmt			       
+			           endloop_stmt.successors.append(flow_control_inst.successors[len(flow_control_inst.successors)-1].successors[0])
+			           flow_control_inst.vest=endloop_stmt
+			       
+			           if block_type == 'ELSE':
+				        loop.mode = 'ELSE'
+                                        itr = flow_control_inst.successors[1]
+				        while itr.id != flow_control_inst.successors[2].id:
+					    itr = itr.successors[0]
+					    loop.else_instructions.append(itr)
 
-	
+
+
+			       else:			 
+				   loop.mode = 'IF' 
+				   for i in range(1,len(current_block.IR.else_instructions)-1):
+					loop.instructions.append(current_block.IR.else_instructions[i])		
+				   
+				   finished = False
+				   for i in range(1,len(skip_list)):
+					if skip_list[-i].id == flow_control_inst.id:
+						finished = True
+				        if not finished:
+					     loop.instructions.append(skip_list[-i])	
+
+				   for inst in current_block.IR.if_instructions:
+					loop.if_instructions.append(inst)
+			     
+				   flow_control_inst.vest = endloop_stmt
+				   endloop_stmt.successors.append(flow_control_inst.successors[len(flow_control_inst.successors)-1].successors[0])				   
+
+                               if_else_stack.pop()
+			       if_else_stack.append(loop)
+			       for index in range(0,len(function_instructions_list)):
+			            if function_instructions_list[index].id == flow_control_inst.id:
+				          function_instructions_list[index]=loop_stmt
+
 			       ignored_insts.add(current_instruction)
 			       ignored_insts.add(skip_list[0])
 
-		   elif flow_control_inst.mnemonic == 'ELSE':
+ 
+
+
+		   elif flow_control_inst.mnemonic == 'ELSE' and i==len(cross_list)-1:
 			if dir == 1:
 			   if in_block:
 				if in_branch == 'THEN':
@@ -600,7 +628,7 @@ class Environment(object):
 				  # set the vest of ELSE to be EIF
 
 
-		   elif flow_control_inst.mnemonic == 'EIF':
+		   elif flow_control_inst.mnemonic == 'EIF' and i==len(cross_list)-1:
 			pass
 			if dir == 1:
 			   if in_block:
@@ -1172,12 +1200,9 @@ class Executor(object):
             for inst in self.bytecodeContainer.function_table[callee].instructions:
 		## If this instruction is IF, append the corresponding IR.IF_ELSE_BLOCK to IntermediateCodes
                 if inst not in self.ignored_insts and inst.id in self.bytecode2ir:
-		    print 'in execute_RETURN ', inst.mnemonic
 		    if inst.mnemonic == 'IF':
 			intermediateCodes.append(inst.If_Else_Block)
 		    if inst.mnemonic == 'LOOP':
-			print 'loop found'
-			print inst.LOOP_BLOCK
 			intermediateCodes.append(inst.LOOP_BLOCK)
 		    else:
                     	intermediateCodes.extend(self.bytecode2ir[inst.id])
@@ -1262,7 +1287,6 @@ class Executor(object):
 
         while self.current_instruction is not None:
 	    if self.current_instruction.vest != None:
-		print 'vest = ',self.current_instruction.vest,'!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 		tmp=self.current_instruction
 		self.current_instruction = self.current_instruction.vest
 		tmp.vest = None
@@ -1390,39 +1414,69 @@ class Executor(object):
 		    if self.current_instruction.mnemonic == 'ELSE' and self.if_else_stack[-1].state == 2:
 			self.current_instruction = self.current_instruction.successors[0]
 		    else:
-                      # return to the closest enclosing IF, which then jumps to ELSE/EIF
-                      self.current_instruction = self.if_else_stack[-1].if_stmt
-                      logger.info("env_on_exit is %s" % self.environment)
-                      if self.if_else_stack[-1].env_on_exit is None:
-                          self.if_else_stack[-1].env_on_exit = copy.copy(self.environment)
+		      if self.current_instruction.mnemonic == 'EIF' and isinstance(self.if_else_stack[-1],IR.LoopBlock):
+			  
+                          block =  self.if_else_stack[-1]
+                          for inst in block.instructions:
+                              block.ir.extend(self.bytecode2ir[inst.id])
+                              self.ignored_insts.add(inst)
+
+		          if block.mode == 'ELSE':
+			      for inst in block.else_instructions:
+			          block.else_ir.extend(self.bytecode2ir[inst.id])
+				  self.ignored_insts.add(inst)
+
+                          self.current_instruction = self.current_instruction.successors[0]
+
+
+
+
                       else:
-			## should only merge the environment when quitting a if_else_block, the previous code 
-			## merge the environement at anytime executing 'EIF' or 'ELSE',except the first time of
-			## 'ELSE' for ELSE mode, or the first time of 'EIF' for IF mode correspondingly 
-		       	if  self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors):
-                            self.if_else_stack[-1].env_on_exit.merge(self.environment)
-			    #self.environment.merge(self.if_else_stack[-1].env_on_exit)
+                          # return to the closest enclosing IF, which then jumps to ELSE/EIF
+                          self.current_instruction = self.if_else_stack[-1].if_stmt
+                          logger.info("env_on_exit is %s" % self.environment)
+                          if self.if_else_stack[-1].env_on_exit is None:
+                              self.if_else_stack[-1].env_on_exit = copy.copy(self.environment)
+                          else:
+			    ## should only merge the environment when quitting a if_else_block, the previous code 
+			    ## merge the environement at anytime executing 'EIF' or 'ELSE',except the first time of
+			    ## 'ELSE' for ELSE mode, or the first time of 'EIF' for IF mode correspondingly 
+		       	    if  self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors):
+                                self.if_else_stack[-1].env_on_exit.merge(self.environment)
+			        #self.environment.merge(self.if_else_stack[-1].env_on_exit)
 
 
 			## restore the environement to corresponding IF instruction,only if first time executing 
 			## ELSE for ELSE mode,or the first time of 'EIF' for IF mode correspondingly, the previous
 			## code did this for all situation except for the ones just mentioned
-		    if self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors)-2:   
+		    if not isinstance(self.if_else_stack[-1],IR.LoopBlock):
+		        if self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors)-2: 
                       	  	self.environment = copy.deepcopy(self.stored_environments[self.if_else_stack[-1].if_stmt.id])
                       	        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (self.if_else_stack[-1].if_stmt.id, self.if_else_stack[-1].if_stmt.mnemonic, len(self.environment.program_stack)))
+                    else:
+			self.if_else_stack.pop()
 
 
 		elif self.current_instruction.mnemonic == 'ENDLOOP':
 		    assert len(self.if_else_stack) > 0
-		    block = self.if_else_stack.pop()
-		    print 'enter'
-	            for inst in block.instructions:
-			block.ir.extend(self.bytecode2ir[inst.id])
-			print 'block appending ir:',self.bytecode2ir[inst.id]
-			self.ignored_insts.add(inst)
-		    self.current_instruction = self.current_instruction.successors[0]
+
+		    block = self.if_else_stack[-1]
+		    if block.mode == 'ELSE':
+                        self.environment = copy.deepcopy(self.stored_environments[block.statement_id])
+                        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (self.if_else_stack[-1].statement_id,'IF', len(self.environment.program_stack)))
+			self.current_instruction = block.else_instructions[0]	
 
 
+		    else:
+			self.if_else_stack.pop()
+	                for inst in block.instructions:
+			    block.ir.extend(self.bytecode2ir[inst.id])
+			    self.ignored_insts.add(inst)
+			if block.mode == 'IF':
+			    for inst in block.if_instructions:
+				block.if_ir.extend(self.bytecode2ir[inst.id])
+				self.ignored_insts.add(inst)
+			self.current_instruction = self.current_instruction.successors[0]
 
 		  
 
@@ -1458,7 +1512,6 @@ class Executor(object):
                                  	self.ignored_insts.add(inst)
 
                              for inst in block.else_instructions:
-				 print 'inst:' , inst
 				 if inst.mnemonic == 'IF':
 					block.else_branch.append(inst.If_Else_Block)
 				 else:

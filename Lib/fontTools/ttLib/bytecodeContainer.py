@@ -40,7 +40,7 @@ class BytecodeContainer(object):
                     parent_instruction.id = program_tag + '.' + str(counter[0])
                     instructions_list.append(parent_instruction)
                     counter[0] += 1
-
+		    print parent_instruction.id
             parent_instruction = None
             instructions_list = []
             for i in instructions:
@@ -91,6 +91,7 @@ class BytecodeContainer(object):
 
                 for key, value in self.function_table.items():
                     value.constructBody()
+
 
         # transform list of instructions -> Program
         def setup_programs():
@@ -250,6 +251,7 @@ class Program(object):
 class Function(object):
     def __init__(self, instructions=None):
         self.instructions = []
+        self.execution_stream = []
     def pretty_print(self):
         self.body.pretty_print()
     def constructBody(self):

@@ -625,7 +625,8 @@ class LoopBlock(object):
                 res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
         res_str += (self.nesting_level-1) * 4 * ' ' + '}'
 	if self.mode == 'ELSE':
-	    res_str+='\n'+(self.nesting_level-1)*4*' '+'if (not '+ str(c)+'){\n'
+	    #res_str+='\n'+(self.nesting_level-1)*4*' '+'if (not '+ str(c)+'){\n'
+	    res_str += '\n'
             for inst in self.else_ir:
                 if inst in self.jump_targets:
                     res_str += "%s:" % self.jump_targets[inst] + '\n'
@@ -634,21 +635,22 @@ class LoopBlock(object):
                 if isinstance(inst,IfElseBlock):
                     res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
                 else:
-                    res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
-            res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+           # res_str += (self.nesting_level-1) * 4 * ' ' + '}'
 
 	if self.mode == 'IF':
-	   res_str+='\n'+(self.nesting_level-1)*4*' '+'if( ' +str(c)+' ){\n'
+	   #res_str+='\n'+(self.nesting_level-1)*4*' '+'if( ' +str(c)+' ){\n'
+	   res_str += '\n'
            for inst in self.if_ir:
                 if inst in self.jump_targets:
                     res_str += "%s:" % self.jump_targets[inst] + '\n'
                 if hasattr(inst, 'jump_targets'):
                    inst.jump_targets = self.jump_targets
                 if isinstance(inst,IfElseBlock):
-                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+                  res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
                 else:
-                    res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
-           res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+          # res_str += (self.nesting_level-1) * 4 * ' ' + '}'
 
 
 

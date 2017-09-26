@@ -538,6 +538,7 @@ class Environment(object):
 		
 
 	target = ins[pc]
+	print target,'target'
 	if len(cross_list) > 0:
 		in_block = False
 		block_type = 'THEN'
@@ -1099,6 +1100,7 @@ class Executor(object):
         self.bytecode2ir = {}
         self.already_seen_insts = set()
         self.ignored_insts = set()
+       
 
     def graphics_state_initialization_code(self):
         return [
@@ -1185,6 +1187,7 @@ class Executor(object):
         self.environment.tag = "fpgm_%s" % callee
         self.environment.replace_locals_with_formals()
         self.stored_environments = {}
+	
 
     def execute_RETURN(self, tag):
         tag_returned_from = self.environment.tag
@@ -1272,6 +1275,8 @@ class Executor(object):
                        block.else_instructions.append(current_instruction)
                    else:
                        block.if_instructions.append(current_instruction)
+    
+
 
     def execute(self, tag):
         logger.info("execute; tag is %s", tag)

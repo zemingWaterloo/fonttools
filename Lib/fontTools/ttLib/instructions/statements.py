@@ -9,6 +9,7 @@ class root_statement(object):
         self.predecessor = None
         self.top = None
         self.id = (0, 0)
+	self.status = 'NORMAL'
 
     def add_successor(self,successor):
         self.successors.append(successor)
@@ -27,6 +28,17 @@ class root_statement(object):
     def __repr__(self):
         return "%s(%r)" % (self.__class__.__name__.split("_")[0],map(lambda x:x.value, self.data))
 class all():
+    class RESTORE_AND_SETVEST_Statement(root_statement):
+	def __init__(self,env_id = None,setvest = None):
+	    root_statement.__init__(self)
+	    self.opcode = -1
+	    self.mnemonic = 'RASV'
+	    self.name = 'RASV'
+	    self.push_num = 0
+	    self.pop_num = 0
+	    self.env_id = env_id
+	    self.setvest = setvest
+
 
     class ENDLOOP_Statement(root_statement):
 	def __init__(self):

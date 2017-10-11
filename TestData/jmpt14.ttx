@@ -147,36 +147,19 @@
       0
       FDEF[ ]
       PUSH[ ]
-      2
-      MPPEM[ ]
-      IF[ ]
-      PUSH[ ]
-      102
-      POP[ ]
-      PUSH[ ]
-      101
-      POP[ ]
-      PUSH[ ]
-      14
-      JMPR[ ] 
-      PUSH[ ]
-      99
-      POP[ ]
-      ELSE[ ]
-      PUSH[ ]
-      19
-      POP[ ]
-      PUSH[ ]
-      12
-      POP[ ]
-      EIF[ ]
-      PUSH[ ]
-      14
-      PUSH[ ]
-      17
+      1
       PUSH[ ]
       20
       POP[ ]
+      PUSH[ ]
+      21
+      POP[ ]
+      PUSH[ ]
+      22
+      POP[ ]
+      PUSH[ ]
+      -14
+      JMPR[ ]
       ENDF[ ]
     </assembly>
   </fpgm>

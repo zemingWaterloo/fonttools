@@ -591,72 +591,45 @@ class JROxStatement(object):
 ## I will use this code to print the IR for if/else blocks
 ## I revised indent before If slightly
 
+
+
+
+
 class LoopBlock(object):
-    def __init__(self,condition = None):
-	self.condition = condition
-        self.ir = []
-        self.if_ir = []
-        self.else_ir=[]
-        self.instructions = []
-        self.if_instructions = []
-        self.else_instructions = []
-        self.jump_targets = {}
-        self.nesting_level = 1
-	self.statement_id = None
-        self.mode = 'THEN'
+    def __init__(self,condition = None,mode = 'TRUE',nesting_level = 1):
+       self.condition = condition
+       self.mode = mode
+       self.loop_instructions = []
+       self.else_instructions = []
+       self.loop_ir = []
+       self.else_ir = []
+       self.nesting_level = nesting_level
+       self.statement_id = None
     def __str__(self):
-        c = self.condition.eval(True)
-        if isinstance(c, dataType.UncertainValue):
-            c = self.condition
-        res_str = (self.nesting_level-1)*4*' '+str(self.ir[-1])+'\n'
-        if self.mode == 'IF':
-	    res_str += (self.nesting_level-1)*4*' '+'while ( not '+str(c)+' ) {\n'
-	else:
-            res_str += (self.nesting_level-1)*4*' '+'while ('+str(c)+') {\n'
-        for inst in self.ir:
-            if inst in self.jump_targets:
-                res_str += "%s:" % self.jump_targets[inst] + '\n'
-            if hasattr(inst, 'jump_targets'):
-               inst.jump_targets = self.jump_targets
-            if isinstance(inst,IfElseBlock):
-                res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
-        #res_str += (self.nesting_level-1) * 4 * ' ' + '}'
-            else:
+       c = self.condition.eval(True)
+       if isinstance(c,dataType.UncertainValue):
+           c = self.condition
+       res_str = (self.nesting_level-1)*4*' '+'\n'
+       #res_str += str(self.loop_ir[-1])+'\n'
+       if self.mode == 'TRUE':
+           res_str += (self.nesting_level-1)*4*' '+'while ( '+str(c)+' ) {\n'
+       else:
+	   res_str += (self.nesting_level-1)*4*' '+'while ( not '+str(c)+' ) {\n'
+       for inst in self.loop_ir:
+           if isinstance(inst,IfElseBlock):
+                res_str += ((self.nesting_level) * 4 * ' ') + str(inst) + '\n'
+           else:
                 res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
-        res_str += (self.nesting_level-1) * 4 * ' ' + '}'
-	if self.mode == 'ELSE':
-	    #res_str+='\n'+(self.nesting_level-1)*4*' '+'if (not '+ str(c)+'){\n'
-	    res_str += '\n'
-            for inst in self.else_ir:
-                if inst in self.jump_targets:
-                    res_str += "%s:" % self.jump_targets[inst] + '\n'
-                if hasattr(inst, 'jump_targets'):
-                   inst.jump_targets = self.jump_targets
-                if isinstance(inst,IfElseBlock):
-                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
-                else:
-                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
-           # res_str += (self.nesting_level-1) * 4 * ' ' + '}'
-
-	if self.mode == 'IF':
-	   #res_str+='\n'+(self.nesting_level-1)*4*' '+'if( ' +str(c)+' ){\n'
-	   res_str += '\n'
-           for inst in self.if_ir:
-                if inst in self.jump_targets:
-                    res_str += "%s:" % self.jump_targets[inst] + '\n'
-                if hasattr(inst, 'jump_targets'):
-                   inst.jump_targets = self.jump_targets
-                if isinstance(inst,IfElseBlock):
-                  res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
-                else:
-                    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
-          # res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+       res_str += (self.nesting_level-1) * 4 * ' ' + '}\n'
+       
+       for inst in self.else_ir:
+           if isinstance(inst,IfElseBlock):
+                res_str += ((self.nesting_level) * 4 * ' ') + str(inst) + '\n'
+           else:
+                res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
 
 
-
-
-
-        return res_str
+       return res_str
 
 
 class IfElseBlock(object):

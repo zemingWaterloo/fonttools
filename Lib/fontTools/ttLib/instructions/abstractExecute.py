@@ -3,6 +3,7 @@ import logging
 import copy
 import IntermediateCode as IR
 import statements 
+import sys
 
 class IdentifierGenerator(object):
     def generateIdentifier(self, tag, number):
@@ -87,7 +88,7 @@ class Environment(object):
 
         new_stack = []
         for (v1, v2) in zip(self.program_stack, environment2.program_stack):
-            if (v1 == v2):
+            if (v1 == v2): 
                 new_stack.append(v1)
             elif isinstance(v1, IR.Variable) and isinstance(v2, IR.Variable) and v1.identifier == v2.identifier:
                 new_stack.append(v1)
@@ -494,14 +495,14 @@ class Environment(object):
         else:
             return self.bytecodeContainer.tag_to_programs[self.tag].body
 
-    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack,ignored_insts,function_instructions_list):
+    def adjust_succ_for_relative_jump(self, current_instruction, arg, mnemonic,if_else_stack,ignored_insts,function_instructions_list,bytecode2ir,executor):
         only_succ = mnemonic == 'JMPR'
         # find the instructions and set the PC
         # returns (True, _) if we broke a cycle
         # also returns the jump successor
 
 	## The cross_list records the control flow instructions crossed 
-	cross_list = []
+	flow_control_insts_cross_list = []
         skip_list = []
         assert not isinstance(arg, dataType.AbstractValue)
         ins = self.fetch_body_for_tag(self.tag).instructions
@@ -518,7 +519,6 @@ class Environment(object):
         else:
             dir = 1
             mag = abs(arg)
-	flag = 0
         while mag > 0:
             ci_size = 1
             for d in ins[pc].data:
@@ -526,120 +526,370 @@ class Environment(object):
             mag = mag - ci_size
             pc += dir
 	    ## catch the crossed control flow instructions
+            
 	    crossing_instruction = ins[pc]
 	    if crossing_instruction.mnemonic == 'IF' or crossing_instruction.mnemonic == 'ELSE' or crossing_instruction.mnemonic == 'EIF':
-	    	cross_list.append(crossing_instruction)
+	    	flow_control_insts_cross_list.append(crossing_instruction)
 		skip_list.append(crossing_instruction)
-		if crossing_instruction.mnemonic == 'EIF':
-			flag = 1
 	    else:
-		if flag == 0:
 		    skip_list.append(crossing_instruction)
 		
 
 	target = ins[pc]
 	print target,'target'
-	if len(cross_list) > 0:
+        if len(flow_control_insts_cross_list) == 0:
+               print 'WHILE (TRUE):{'
+               for i in range(1,len(skip_list)):
+                   print '    ', skip_list[-i].id,' : ',skip_list[-i]
+               print '}'
+               sys.exit('infinite loop detected, quit!')
+        # only interested in the jump which crosses the flow control instructions
+	if len(flow_control_insts_cross_list) > 0:
+		
+		# figure out if in a if/else block, block type and which branch currently in
 		in_block = False
 		block_type = 'THEN'
 		in_branch = 'THEN'
 
 		if len(if_else_stack)>0:
 		   in_block = True
-		   current_block = if_else_stack[-1]
+		   current_block = executor.if_else_stack[-1]
 		   if len(current_block.if_stmt.successors) == 3:
 			block_type = 'ELSE'
 		   if current_block.IR.mode == 'ELSE':
 			in_branch = 'ELSE'
-		
-
-   
-		for i in range(0,len(cross_list)):
-                   flow_control_inst = cross_list[i]
-		   if flow_control_inst.mnemonic == 'IF' and i==len(cross_list)-1:
-			if dir == -1:
-			   if in_block:
- 			       loop_stmt = statements.all.LOOP_Statement()
-			       loop_stmt.id = flow_control_inst.id
-                               endloop_stmt = statements.all.ENDLOOP_Statement()	
-			       loop = IR.LoopBlock(current_block.IR.condition)
-			       loop.nestring_level = flow_control_inst.If_Else_Block.nesting_level
-			       loop_stmt.LOOP_BLOCK = loop
-			       loop.statement_id = flow_control_inst.id
-			       if len(cross_list) == 1:
-                                   for i in range(1,len(current_block.IR.if_instructions)-1):
-                                        loop.instructions.append(current_block.IR.if_instructions[i])
-
-			           for i in range(1,len(skip_list)-len(current_block.IR.if_instructions)+2):
-					loop.instructions.append(skip_list[-i])
+                # go through each flow control instruction crossed
 
 
-			           endloop_stmt.successors.append(flow_control_inst.successors[len(flow_control_inst.successors)-1].successors[0])
-			           flow_control_inst.vest=endloop_stmt
-			       
-			           if block_type == 'ELSE':
-				        loop.mode = 'ELSE'
-                                        itr = flow_control_inst.successors[1]
-				        while itr.id != flow_control_inst.successors[2].id:
+		# if jump backwards
+		if dir == -1:
+		# remove the blocks in all layers which the jump instruction crosses all the way over
+                    list_stack = []
+                    for i in range(0,len(flow_control_insts_cross_list)):
+                        list_stack.append(flow_control_insts_cross_list[i])
+                        while len(list_stack) > 1:
+			     if list_stack[-1].mnemonic == 'IF' and list_stack[-2].mnemonic == 'EIF':
+				 list_stack.pop()
+				 list_stack.pop()
+			     else:
+
+                                 if len(list_stack) > 2:
+                                     if list_stack[-1].mnemonic == 'IF' and list_stack[-2].mnemonic == 'ELSE' and list_stack[-3].mnemonic == 'EIF':
+                                         list_stack.pop()
+				         list_stack.pop()
+				         list_stack.pop()
+                                     else:
+					 break
+				 else:
+					 break
+                              
+
+                    flow_control_insts_cross_list = list_stack
+		    num_of_layers_crossed = 0
+		    # count how many layers of if/else crossed caused by this JUMP statement
+
+		    for i in range(0,len(flow_control_insts_cross_list)):
+			 flow_control_inst = flow_control_insts_cross_list[-(i+1)]
+		    	 if flow_control_inst.mnemonic == 'IF':
+				num_of_layers_crossed += 1
+
+		    # the max layers a jump instruction can cross is the number of layer of itself
+		    if num_of_layers_crossed  > len(if_else_stack)+1:
+			 num_of_layers_crossed = len(if_else_stack)+1
+
+		    # if num_of_layers_crossed>0,the outer most layer of If/Else block will be regarded as a while loop
+                    if num_of_layers_crossed > 0:
+		        # initlize and setup a set of Loop_statement, Endloop_statement and  LoopBlock ir
+		        if_else_block = executor.if_else_stack[-num_of_layers_crossed]
+		        loop_stmt = statements.all.LOOP_Statement()
+		        loop_stmt.id = if_else_block.if_stmt.id
+		     
+		        endloop_stmt = statements.all.ENDLOOP_Statement()
+		        condition = if_else_block.IR.condition
+		        loopIR = IR.LoopBlock(condition,'TRUE',if_else_block.IR.nesting_level)
+		        loop_stmt.LOOP_BLOCK = loopIR
+		        loopIR.statement_id = if_else_block.if_stmt.id
+			executor.ignored_insts.add(current_instruction.predecessor)
+			print 'add ignore:',current_instruction.predecessor
+                        # construct instructions list of loop body
+
+	                if if_else_block.IR.mode == 'THEN':
+			        upper_index = len(if_else_block.IR.if_instructions)
+			        #if num_of_layers_crossed == len(if_else_stack):
+			        #      upper_index -= 1
+			        #      executor.ignored_insts.add(if_else_block.IR.if_instructions[-1])
+				for ind in range(1,upper_index):
+				    if not if_else_block.IR.if_instructions[ind] in executor.ignored_insts:
+					loopIR.loop_instructions.append(if_else_block.IR.if_instructions[ind])
+			        #loopIR.loop_instructions.extend(if_else_block.IR.if_instructions[1:upper_index])
+				# add this part of code into ignored list
+				for i in range(0,upper_index):
+				    executor.ignored_insts.add(if_else_block.IR.if_instructions[i])
+
+
+
+	                else:
+			        loopIR.mode = 'FALSE'
+                                upper_index = len(if_else_block.IR.else_instructions)
+                                #if num_of_layers_crossed == len(if_else_stack):
+                                #    upper_index -= 1
+                                #    executor.ignored_insts.add(if_else_block.IR.else_instructions[upper_index])
+			
+				for ind in range(1,upper_index):
+				    if not if_else_block.IR.else_instructions[ind] in executor.ignored_insts:
+                                        loopIR.loop_instructions.append(if_else_block.IR.else_instructions[ind])
+				# add this part of code into ignored list
+                                for i in range(0,upper_index):
+                                    executor.ignored_insts.add(if_else_block.IR.else_instructions[i])
+
+
+
+		        # if the jump instruction jumps out 1 layer,append the instructions outside this layer of if
+		        # to the body of while loop
+		        if num_of_layers_crossed == 1:
+                                tmp = skip_list[-1]
+                                while tmp.id != loopIR.statement_id:
+			            loopIR.loop_instructions.append(tmp)
+				    if tmp.mnemonic == 'IF':
+					tmp = tmp.successors[len(tmp.successors)-1]
+				    else:
+					tmp = tmp.successors[0]
+
+
+		        # construct else instructions for loop
+		        if len(if_else_block.if_stmt.successors)==3:
+			       if if_else_block.IR.mode == 'THEN':
+			    	    else_inst=if_else_block.if_stmt.successors[1]
+				    while  else_inst.id != if_else_block.if_stmt.successors[2].id:
+				        else_inst = else_inst.successors[0]
+				        loopIR.else_instructions.append(else_inst)
+					executor.ignored_insts.add(else_inst)				
+			       else:
+				    loopIR.else_instructions.extend(if_else_block.IR.if_instructions[1:])
+				    for i in range(1,len(if_else_block.IR.if_instructions)):
+				       executor.ignored_insts.add(if_else_block.IR.if_instructions[i])
+
+
+			target.vest = endloop_stmt
+		        #if_else_block.if_stmt.vest = endloop_stmt
+                        while_loop_stack = Executor.While_Loop_stack(loopIR,loop_stmt)
+                        if_else_stack[-num_of_layers_crossed]=while_loop_stack
+                        
+			
+  		        for index in range(0,len(function_instructions_list)):
+                              if function_instructions_list[index].id == if_else_block.if_stmt.id:
+                                    function_instructions_list[index]=loop_stmt
+			print if_else_block.if_stmt.successors[len(if_else_block.if_stmt.successors)-1].successors[0],' the successor of endloop'
+		        endloop_stmt.successors.append(if_else_block.if_stmt.successors[len(if_else_block.if_stmt.successors)-1].successors[0])
+	
+                        # remove the jump instruction and target in this case
+		        executor.ignored_insts.add(current_instruction)    
+			#if num_of_layers_crossed > 1:    
+                        #  if if_else_stack[-1].IR.mode == 'THEN':        
+                        #     if_else_stack[-1].IR.if_instructions.pop() 
+                        #  else:
+			#     if_else_stack[-1].IR.else_instructions.pop()
+		        
+			
+			flag = 0
+			if num_of_layers_crossed > 1:
+  			   flag = 1
+
+                        for i in range(0,num_of_layers_crossed-1):
+                             s = if_else_stack.pop()
+                             block = s.IR
+                             for inst in block.if_instructions:
+                                 if inst.mnemonic == 'IF':
+                                        if(inst.id != s.if_stmt.id):
+                                           block.if_branch.append(inst.If_Else_Block)
+                                 else:
+				        if not inst in executor.ignored_insts:
+					   block.if_branch.extend(bytecode2ir[inst.id])
+                                 if inst.id != s.if_stmt.id:
+                                        executor.ignored_insts.add(inst)
+
+                             for inst in block.else_instructions:
+                                 if inst.mnemonic == 'IF':
+                                        block.else_branch.append(inst.If_Else_Block)
+                                 else:
+				        if not inst in executor.ignored_insts:
+                                            block.else_branch.extend(bytecode2ir[inst.id])
+                                 executor.ignored_insts.add(inst)
+
+			     ## append the loop instructions outside of the outer most IF block to the inner most IF/ELSE block
+			     ## if the jump instruction jumps out multiple layers
+			     if flag == 1:
+				flag = 0
+				k = 1
+				tmp = skip_list[-k]
+				while tmp.id != loopIR.statement_id:
+				    if block.mode == 'THEN':
+				        block.if_instructions.append(tmp)
+				        block.if_branch.extend(bytecode2ir[tmp.id])
+				    else:
+					block.else_instructions.append(tmp)
+					block.else_branch.extend(bytecode2ir[tmp.id])
+				    k += 1
+				    tmp = skip_list[-k]
+				    
+				
+                             ## when poping off an if-else-block from the stack, if this is a nested one
+                             ## append its IR to the parent if/else block
+                             if len(if_else_stack)>0:
+                                nested_block = if_else_stack[-1].IR
+                                if nested_block.mode == 'TRUE':
+                                        nested_block.loop_instructions.append(s.if_stmt)
+                                elif nested_block.mode == 'THEN':
+                                        nested_block.if_instructions.append(s.if_stmt)
+				elif nested_block.mode == 'ELSE':
+					nested_block.else_instructions.append(s.if_stmt)
+				executor.ignored_insts.add(s.if_stmt)
+                        
+			# if the jump instruction which jumps backwards does not cross any layer,(even though it crosses some flow control instructions)
+		    else:
+				# if this jump is in an if/else block
+				# check if it jumps crosses over the else instruction of current if/else block
+				if in_block:
+				    for i in range(0,len(flow_control_insts_cross_list)):
+                                        cross_else = 0
+					if flow_control_insts_cross_list[i].id == if_else_stack[-1].if_stmt.successors[1].id:
+						# this jumps crosses is in an if/else block,and it does not jump out any layer,but crosses the else statement of the 
+						# if/else block it's in ,  set the vest of the else to the corresponding EIF statement
+						flow_control_insts_cross_list[i].vest = if_else_stack[-1].if_stmt.successors[2]
+						# can remove the jump instruction and the target in this case
+						executor.ignored_insts.add(current_instruction)
+						executor.ignored_insts.add(if_else_stack[-1].IR.else_instructions[-1])
+                                                cross_else = 1
+				    if not cross_else:
+
+                                       print 'WHILE (TRUE):{'
+                                       for i in range(1,len(skip_list)):
+                                           print '    ', skip_list[-i].id,' : ',skip_list[-i]
+                                       print '}'
+                                       sys.exit('infinite loop detected, quit!')
+
+				else:
+				    print 'WHILE (TRUE):{'
+				    for i in range(1,len(skip_list)):
+					print'    ',skip_list[-i].id,' : ',skip_list[-i]
+				    print '}'
+				    sys.exit('infinite loop detected, quit!')
+	
+	
+ 		# if jumps forward
+		if dir == 1:
+		    # remove all pairs of (IF,EIF,(ELSE)) the jump insturction crossed as when dir == -1
+		    num_of_layers_crossed = 0
+		    list_stack = []
+                    print flow_control_insts_cross_list
+	  	    for i in range(0,len(flow_control_insts_cross_list)):
+			list_stack.append(flow_control_insts_cross_list[i])
+			while len(list_stack) > 1:
+			   if list_stack[-1].mnemonic == 'EIF' and list_stack[-2].mnemonic == 'IF':
+				list_stack.pop()
+				list_stack.pop()
+			   else:
+				if len(list_stack) > 2:
+				     if list_stack[-1].mnemonic == 'EIF'  and list_stack[-2].mnemonic == 'ELSE' and list_stack[-3].mnemonic == 'IF':
+					 list_stack.pop()
+					 list_stack.pop()
+					 list_stack.pop()
+				     else:	
+					 break
+				else:
+				     break 
+                    flow_control_insts_cross_list = list_stack
+
+		    for i in flow_control_insts_cross_list:
+			if i.mnemonic == 'EIF':
+			    num_of_layers_crossed += 1
+
+                    if num_of_layers_crossed == 0:
+		        if in_block:
+			    # does not jump out any layer,but crosses its own else
+			    for i in range(0,len(flow_control_insts_cross_list)):
+			        if flow_control_insts_cross_list[i].id == if_else_stack[-1].if_stmt.successors[1].id:
+					if_else_stack[-1].if_stmt.successors[2].vest = flow_control_insts_cross_list[i]
+					# can remove the jump instruction and jump target in this case
+					executor.ignored_insts.add(current_instruction)
+					executor.ignored_insts.add(if_else_stack[-1].IR.if_instructions[-1])
+
+		    else:
+			if in_block:
+			    s = if_else_stack[-1].if_stmt
+			    target.vest = s.successors[len(s.successors)-1]
+                            executor.ignored_insts.add(current_instruction.predecessor)
+                        
+                        if num_of_layers_crossed > 0:
+                            if if_else_stack[-num_of_layers_crossed].IR.mode == 'THEN':
+                                if len(s.successors) == 2:
+                                    ghost_else = statements.all.ELSE_Statement()
+                                    eif = executor.if_else_stack[-num_of_layers_crossed].if_stmt.successors[-1]
+                                    If = executor.if_else_stack[-num_of_layers_crossed].if_stmt
+			            ghost_else.successors.append(eif.successors[0])
+                                    ghost_else.id = 'GHOST'
+                                    eif.successors[0]=target
+                                    target.predecessor.successors[0]=eif
+                                    if len(If.successors)==2:
+                                        If.successors[1]=ghost_else
+                                        If.successors.append(eif)
+
+			            if num_of_layers_crossed == 1:
+				        target.vest = ghost_else
+			            else:              
+					if len(executor.if_else_stack[-1].if_stmt.successors)==2 or executor.if_else_stack[-1].IR.mode == 'ELSE':
+                                            target.vest = if_else_stack[-1].if_stmt.successors[-1]
+					else:
+					    target.vest = if_else_stack[-1].if_stmt.successors[1]
+                                        eif.vest = ghost_else
+                                    executor.ignored_insts.add(current_instruction.predecessor)
+			            executor.ignored_insts.add(current_instruction)
+                                else:
+  					if_stmt = executor.if_else_stack[-num_of_layers_crossed].if_stmt
+					else_stmt = if_stmt.successors[1]
+					eif_stmt = if_stmt.successors[2]
+					itr = else_stmt
+					while itr.successors[0].id != eif_stmt.id:
 					    itr = itr.successors[0]
-					    loop.else_instructions.append(itr)
+					itr.successors[0] = eif_stmt.successors[0]
+                                        target.predecessor.successors[0]=eif_stmt
+					eif_stmt.successors[0]=target
 
+					if num_of_layers_crossed == 1:
+					    target.vest = else_stmt
+					else:
+					    if len(executor.if_else_stack[-1].if_stmt.successors) == 2 or executor.if_else_stack[-1].IR.mode == 'ELSE':
+					       target.vest = if_else_stack[-1].if_stmt.successors[-1]
+					    else:
+					       target.vest = if_else_stack[-1].if_stmt.successors[1]
+					    eif_stmt.vest = else_stmt
 
+					executor.ignored_insts.add(current_instruction.predecessor)
+					executor.ignored_insts.add(current_instruction)
+                            else:
+					print 'check,,,,,'
+					if_stmt = executor.if_else_stack[-num_of_layers_crossed].if_stmt
+					else_stmt = if_stmt.successors[1]
+					eif_stmt = if_stmt.successors[2]
+					# 1.restore the environment to the env right before else
+					executor.environment = copy.deepcopy(executor.if_else_stack[-num_of_layers_crossed].env_on_exit)
+					print executor.environment
+					vest = statements.all.RESTORE_AND_SETVEST_Statement()
+					vest.env_id = current_instruction.id
+					setvest = None
+					if len(executor.if_else_stack[-1].if_stmt.successors)==2 or executor.if_else_stack[-1].IR.mode == 'ELSE':
+						setvest = if_else_stack[-1].if_stmt.successors[-1]
+					else:
+						setvest = if_else_stack[-1].if_stmt.successors[1]
+					vest.setvest = setvest
+					tmp = eif_stmt.successors[0]
+					eif_stmt.successors[0] = target
+					target.vest = vest
+					target = tmp
+					
+					print 'target=',target,'setvest=',setvest
 
-			       else:			 
-				   loop.mode = 'IF' 
-				   for i in range(1,len(current_block.IR.else_instructions)-1):
-					loop.instructions.append(current_block.IR.else_instructions[i])		
-				   
-				   finished = False
-				   for i in range(1,len(skip_list)):
-					if skip_list[-i].id == flow_control_inst.id:
-						finished = True
-				        if not finished:
-					     loop.instructions.append(skip_list[-i])	
-
-				   for inst in current_block.IR.if_instructions:
-					loop.if_instructions.append(inst)
-			     
-				   flow_control_inst.vest = endloop_stmt
-				   endloop_stmt.successors.append(flow_control_inst.successors[len(flow_control_inst.successors)-1].successors[0])				   
-
-                               if_else_stack.pop()
-			       if_else_stack.append(loop)
-			       for index in range(0,len(function_instructions_list)):
-			            if function_instructions_list[index].id == flow_control_inst.id:
-				          function_instructions_list[index]=loop_stmt
-
-			       ignored_insts.add(current_instruction)
-			       ignored_insts.add(skip_list[0])
-
- 
-
-
-		   elif flow_control_inst.mnemonic == 'ELSE' and i==len(cross_list)-1:
-			if dir == 1:
-			   if in_block:
-				if in_branch == 'THEN':
-				  current_block.if_stmt.successors[2].vest = flow_control_inst
-				  # set the vest of the EIF to be ELSE
-			else:
-			   if in_block:
-				if in_branch == 'ELSE':
-				  current_block.if_stmt.successors[1].vest = current_block.if_stmt.successors[2]
-				  # set the vest of ELSE to be EIF
-
-
-		   elif flow_control_inst.mnemonic == 'EIF' and i==len(cross_list)-1:
-			pass
-			if dir == 1:
-			   if in_block:
-			       target.vest = flow_control_inst
-			       for ignore in skip_list:
-				   ignored_insts.add(ignore)
-		
-
-
-        logger.info("     relative jump target is %s" % ins[pc])
+        logger.info("relative jump target is %s" % ins[pc])
 
         if only_succ:
             current_instruction.successors = []
@@ -1100,7 +1350,7 @@ class Executor(object):
         self.bytecode2ir = {}
         self.already_seen_insts = set()
         self.ignored_insts = set()
-       
+	self.current_execution_stream = None
 
     def graphics_state_initialization_code(self):
         return [
@@ -1124,6 +1374,12 @@ class Executor(object):
             IR.CopyStatement(IR.RP1(),IR.Constant(0)),
             IR.CopyStatement(IR.RP2(),IR.Constant(0))
             ]
+
+    class While_Loop_stack(object):
+        def __init__(self,IR,while_stmt):
+	    self.IR = IR
+ 	    self.while_stmt = while_stmt
+
 
     class If_else_stack(object):
         def __init__(self, IR, if_stmt, state):
@@ -1184,12 +1440,15 @@ class Executor(object):
         logger.info("in %s, calling function %d" % (self.environment.tag, callee))
         assert callee in self.bytecodeContainer.function_table, "Callee function #%s not defined" % callee
         self.current_instruction = self.bytecodeContainer.function_table[callee].start()
+        self.current_execution_stream = self.bytecodeContainer.function_table[callee].execution_stream
         self.environment.tag = "fpgm_%s" % callee
         self.environment.replace_locals_with_formals()
         self.stored_environments = {}
 	
 
     def execute_RETURN(self, tag):
+	for inst in self.ignored_insts:
+	    print 'ignored:',inst,' ',inst.id
         tag_returned_from = self.environment.tag
         (callee, previous_instruction, self.current_instruction,
          self.environment.tag, caller_program_stack, self.stored_environments, self.breadcrumbs,
@@ -1200,9 +1459,11 @@ class Executor(object):
             pass
         else:
             intermediateCodes = []
+	    print 'print from return :',self.bytecodeContainer.function_table[callee].instructions
             for inst in self.bytecodeContainer.function_table[callee].instructions:
 		## If this instruction is IF, append the corresponding IR.IF_ELSE_BLOCK to IntermediateCodes
                 if inst not in self.ignored_insts and inst.id in self.bytecode2ir:
+		    print 'inst:',inst,'is not in ignored insts'
 		    if inst.mnemonic == 'IF':
 			intermediateCodes.append(inst.If_Else_Block)
 		    if inst.mnemonic == 'LOOP':
@@ -1276,6 +1537,9 @@ class Executor(object):
                    else:
                        block.if_instructions.append(current_instruction)
     
+    def setIRForBytecodeInExecutionStream(self,current_instruction,ir):
+         self.execution_stream.append((copy.deepcopy(current_instruction),ir))
+
 
 
     def execute(self, tag):
@@ -1283,19 +1547,24 @@ class Executor(object):
         self.environment.tag = tag
         program = self.bytecodeContainer.tag_to_programs[tag]
         self.current_instruction = program.start()
-
         self.if_else_stack = []
         self.environment.minimum_stack_depth = 0
-
-
+        
 
 
         while self.current_instruction is not None:
+
 	    if self.current_instruction.vest != None:
 		tmp=self.current_instruction
 		self.current_instruction = self.current_instruction.vest
 		tmp.vest = None
-		
+
+	    if self.current_instruction.mnemonic == 'RASV':
+		self.environment = copy.deepcopy(self.stored_environments[self.current_instruction.env_id])
+		self.environment.program_stack.pop()
+		self.current_instruction = self.current_instruction.setvest
+		print 'current -inst = !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',self.current_instruction	
+                
 
             logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.environment.program_stack))))
             if self.current_instruction.data is not None:
@@ -1354,13 +1623,20 @@ class Executor(object):
 		    self.current_instruction.If_Else_Block = newBlock
 
                     self.if_else_stack.append(self.If_else_stack(newBlock, self.current_instruction, 0))
+
             elif self.current_instruction.mnemonic == 'ELSE':
                 is_reexecuting = True
                 block = self.if_else_stack[-1].IR
                 block.mode = 'ELSE'
             
 
-            
+            # skip an instruction with SKIP status,and reset the status to NORMAL
+	    elif self.current_instruction.mnemonic == 'EIF':
+		if self.current_instruction.status == 'SKIP':
+			self.current_instruction.status = 'NORMAL'
+			self.current_instruction = self.current_instruction.successors[0]
+
+
 
 
 	    if store_env:
@@ -1381,7 +1657,7 @@ class Executor(object):
                 dest = self.environment.program_stack_pop().eval(False)
                 callee=self.call_stack[-1][0]
                 instructions_list=self.bytecodeContainer.function_table[callee].instructions
-                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack,self.ignored_insts,instructions_list)
+                branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack,self.ignored_insts,instructions_list,self.bytecode2ir,self)
                 logger.info("     adjusted succs now %s", self.current_instruction.successors)
                 if not is_reexecuting:
                     # first time round at this JROT/JROF statement...
@@ -1393,7 +1669,6 @@ class Executor(object):
                         newInst = IR.JmpStatement(None)
 
                     newInst.bytecode_dest = branch_succ
-                    ir.append(newInst)
                     self.environment.current_instruction = self.current_instruction
 
                     if e != None:
@@ -1403,13 +1678,13 @@ class Executor(object):
                         self.breadcrumbs.append(branch_succ)
                         self.breadcrumbs_if_else_stack.append(if_else_stack_copy)
                         logger.info("putting %s in stored_environments; breadcrumb count %d" % (str(branch_succ.id), len(self.breadcrumbs)))
-
-            ir.extend(self.environment.execute_current_instruction(self.current_instruction))
+            
+	    ir.extend(self.environment.execute_current_instruction(self.current_instruction))
             if self.stack_depth() > self.maximum_stack_depth:
                 self.maximum_stack_depth = self.stack_depth()
 
             self.setIRForBytecode(self.current_instruction, ir)
-
+            
             # normal case: 1 succ
 	    tmp=self.current_instruction
             if len(self.current_instruction.successors) == 1:
@@ -1419,17 +1694,23 @@ class Executor(object):
 		    if self.current_instruction.mnemonic == 'ELSE' and self.if_else_stack[-1].state == 2:
 			self.current_instruction = self.current_instruction.successors[0]
 		    else:
-		      if self.current_instruction.mnemonic == 'EIF' and isinstance(self.if_else_stack[-1],IR.LoopBlock):
-			  
-                          block =  self.if_else_stack[-1]
-                          for inst in block.instructions:
-                              block.ir.extend(self.bytecode2ir[inst.id])
-                              self.ignored_insts.add(inst)
+		      if self.current_instruction.mnemonic == 'EIF' and isinstance(self.if_else_stack[-1].IR,IR.LoopBlock):
 
-		          if block.mode == 'ELSE':
-			      for inst in block.else_instructions:
-			          block.else_ir.extend(self.bytecode2ir[inst.id])
-				  self.ignored_insts.add(inst)
+			  
+                          block =  self.if_else_stack[-1].IR
+                          for inst in block.loop_instructions:
+                              if inst.mnemonic == 'IF':
+				   block.loop_ir.append(inst.If_Else_Block)
+			      else:
+                              	   block.loop_ir.extend(self.bytecode2ir[inst.id])
+                                   self.ignored_insts.add(inst)
+
+			  for inst in block.else_instructions:
+			      if inst.mnemonic == 'IF':
+				   block.else_ir.append(inst.If_Else_Block)
+			      else:
+			      	   block.else_ir.extend(self.bytecode2ir[inst.id])
+		              	   self.ignored_insts.add(inst)
 
                           self.current_instruction = self.current_instruction.successors[0]
 
@@ -1454,7 +1735,7 @@ class Executor(object):
 			## restore the environement to corresponding IF instruction,only if first time executing 
 			## ELSE for ELSE mode,or the first time of 'EIF' for IF mode correspondingly, the previous
 			## code did this for all situation except for the ones just mentioned
-		    if not isinstance(self.if_else_stack[-1],IR.LoopBlock):
+		    if not isinstance(self.if_else_stack[-1].IR,IR.LoopBlock):
 		        if self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors)-2: 
                       	  	self.environment = copy.deepcopy(self.stored_environments[self.if_else_stack[-1].if_stmt.id])
                       	        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (self.if_else_stack[-1].if_stmt.id, self.if_else_stack[-1].if_stmt.mnemonic, len(self.environment.program_stack)))
@@ -1465,22 +1746,30 @@ class Executor(object):
 		elif self.current_instruction.mnemonic == 'ENDLOOP':
 		    assert len(self.if_else_stack) > 0
 
-		    block = self.if_else_stack[-1]
-		    if block.mode == 'ELSE':
+		    block = self.if_else_stack[-1].IR
+		    if block.mode == 'TRUE' and len(block.else_instructions) > 0:
                         self.environment = copy.deepcopy(self.stored_environments[block.statement_id])
-                        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (self.if_else_stack[-1].statement_id,'IF', len(self.environment.program_stack)))
+                        logger.info("program pointer back (if) to [%s] %s, stack height %d" % (block.statement_id,'IF', len(self.environment.program_stack)))
 			self.current_instruction = block.else_instructions[0]	
 
 
 		    else:
 			self.if_else_stack.pop()
-	                for inst in block.instructions:
-			    block.ir.extend(self.bytecode2ir[inst.id])
-			    self.ignored_insts.add(inst)
-			if block.mode == 'IF':
-			    for inst in block.if_instructions:
-				block.if_ir.extend(self.bytecode2ir[inst.id])
-				self.ignored_insts.add(inst)
+	                for inst in block.loop_instructions:
+			    print 'in return loop:',inst
+			    if inst.mnemonic == 'IF':
+				block.loop_ir.append(inst.If_Else_Block)
+			    else:
+			    	block.loop_ir.extend(self.bytecode2ir[inst.id])
+			    	#self.ignored_insts.add(inst)
+
+			for inst in block.else_instructions:
+			    if inst.mnemonic == 'IF':
+				block.else_ir_append(inst.If_Else_Block)
+			    else:
+ 			    	block.else_ir.extend(self.bytecode2ir[inst.id])
+			    	#self.ignored_insts.add(inst)
+
 			self.current_instruction = self.current_instruction.successors[0]
 
 		  
@@ -1506,6 +1795,8 @@ class Executor(object):
                              s = self.if_else_stack.pop()
                              block = s.IR
                              for inst in block.if_instructions:
+			      # only append inst which is not in ignored list, (for remove the unnecessary jump instructions)
+			      if not inst in self.ignored_insts:
 				 ## An IF instruction should not be in the ignored list
 				 ## or the whole If_Else_Block will not show up in the intermediate code
 				 if inst.mnemonic == 'IF':
@@ -1517,6 +1808,8 @@ class Executor(object):
                                  	self.ignored_insts.add(inst)
 
                              for inst in block.else_instructions:
+			      # only append inst which is not in ignored list, (for remove the unnecessary jump instructions)
+			      if not inst in self.ignored_insts:
 				 if inst.mnemonic == 'IF':
 					block.else_branch.append(inst.If_Else_Block)
 				 else:
@@ -1575,3 +1868,9 @@ class Executor(object):
             if inst not in self.ignored_insts:
                 intermediateCodes.extend(self.bytecode2ir[inst.id])
         self.bytecodeContainer.IRs[tag] = self.fixupDestsToIR(intermediateCodes)
+
+
+
+
+
+

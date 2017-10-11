@@ -151,32 +151,53 @@
       MPPEM[ ]
       IF[ ]
       PUSH[ ]
-      102
+      3
       POP[ ]
       PUSH[ ]
-      101
-      POP[ ]
-      PUSH[ ]
-      14
-      JMPR[ ] 
-      PUSH[ ]
-      99
+      4
       POP[ ]
       ELSE[ ]
       PUSH[ ]
-      19
+      5
       POP[ ]
+      PUSH[ ]
+      6
+      POP[ ]
+      PUSH[ ]
+      7
+      POP[ ]
+      MPPEM[ ]
+      IF[ ]
+      PUSH[ ]
+      8
+      POP[ ]
+      MPPEM[ ]
+      IF[ ]
+      PUSH[ ]
+      9
+      POP[ ]
+      PUSH[ ]
+      10
+      POP[ ]
+      PUSH[ ]
+      13
+      JMPR[ ]
+      PUSH[ ]
+      11
+      POP[ ]
+      EIF[ ]
       PUSH[ ]
       12
       POP[ ]
       EIF[ ]
+      EIF[ ]
+      PUSH[ ]
+      17
+      POP[ ]
       PUSH[ ]
       14
       PUSH[ ]
-      17
-      PUSH[ ]
-      20
-      POP[ ]
+      15
       ENDF[ ]
     </assembly>
   </fpgm>

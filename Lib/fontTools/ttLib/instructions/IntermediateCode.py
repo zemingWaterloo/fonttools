@@ -1,6 +1,7 @@
 from fontTools.ttLib.data import dataType
 import math
 import copy
+import sys
 
 class Boolean(object):
     def __init__(self, value):
@@ -150,6 +151,12 @@ class ProjectionVector(GraphicsStateVariable):
     def __init__(self):
         self.data = None
         self.identifier = 'GS[projection_vector]'
+
+class ProjectionVectorByComponent(GraphicsStateVariable):
+    def __init__(self, selector):
+        self.data = None
+        self.selector = selector
+        self.identifier = 'GS[projection_vector_%s]' % self.selector
 
 class GlobalDictionary(Variable):
     def __init__(self):
@@ -634,6 +641,7 @@ class LoopBlock(object):
 
 class IfElseBlock(object):
     def __init__(self, condition = None, nesting_level = 1):
+        self.reverse = False
         self.condition = condition
         # IR
         self.if_branch = []
@@ -647,26 +655,29 @@ class IfElseBlock(object):
         # random crap
         self.mode = 'THEN'
         self.jump_targets = {}
+        
+        # indicate if there is a break when
+        # the if condition is not satisfied 
+        self.break_indicator = False
+        self.break_layer = 0
+
+	# indicate if there is a return at the end
+	# of if and else block
+	self.rtn_if = False
+	self.rtn_else = False
+
     def __str__(self):
+        if self.reverse == True:
+            tmp = self.if_branch
+            self.if_branch = self.else_branch
+            self.else_branch = tmp
         c = self.condition.eval(True)
         if isinstance(c, dataType.UncertainValue):
             c = self.condition
+	
         res_str = (self.nesting_level-1)*4*' '+'if ('+str(c)+') {\n'
-        for inst in self.if_branch:
-            if inst in self.jump_targets:
-                res_str += "%s:" % self.jump_targets[inst] + '\n'
-            if hasattr(inst, 'jump_targets'):
-               inst.jump_targets = self.jump_targets
-	    if isinstance(inst,IfElseBlock):
-            	res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
-        #res_str += (self.nesting_level-1) * 4 * ' ' + '}'
-	    else:
-                res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
-        res_str += (self.nesting_level-1) * 4 * ' ' + '}'
-
-
-        if len(self.else_branch) > 0:
-            res_str += ' else {\n'
+        if len(self.if_branch) == 0 and len(self.else_branch) > 0:
+            res_str = (self.nesting_level-1)*4*' ' + 'if ( not '+str(c)+' ) {\n'
             for inst in self.else_branch:
                 if inst in self.jump_targets:
                     res_str += "%s:" % self.jump_targets[inst] + '\n'
@@ -674,4 +685,39 @@ class IfElseBlock(object):
                     inst.jump_targets = self.jump_targets
                 res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
             res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+
+
+        else:
+            for inst in self.if_branch:
+                if inst in self.jump_targets:
+                    res_str += "%s:" % self.jump_targets[inst] + '\n'
+                if hasattr(inst, 'jump_targets'):
+                    inst.jump_targets = self.jump_targets
+	        if isinstance(inst,IfElseBlock):
+            	    res_str += ((self.nesting_level-1) * 4 * ' ') + str(inst) + '\n'
+            #res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+	        else:
+                    res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
+            if self.rtn_if :
+ 	        res_str += (self.nesting_level * 4 * ' ') + 'RET' + '\n'
+	    res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+
+
+            if len(self.else_branch) > 0:
+                res_str += ' else {\n'
+                for inst in self.else_branch:
+                    if inst in self.jump_targets:
+                        res_str += "%s:" % self.jump_targets[inst] + '\n'
+                    if hasattr(inst, 'jump_targets'):
+                        inst.jump_targets = self.jump_targets
+                    res_str += (self.nesting_level * 4 * ' ') + str(inst) + '\n'
+                if self.break_indicator:
+                    res_str += (self.nesting_level * 4 * ' ') + 'break(' + str(self.break_layer) + ')\n'
+                res_str += (self.nesting_level-1) * 4 * ' ' + '}'
+	        if self.rtn_else :
+                    res_str += (self.nesting_level * 4 * ' ') + 'RET' + '\n'
+
+	    else:
+		if self.break_indicator :
+                    res_str += '\n' + ((self.nesting_level-1) * 4 * ' ') + 'break(' + str(self.break_layer) + ')\n'
         return res_str

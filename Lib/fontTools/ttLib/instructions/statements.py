@@ -1,7 +1,10 @@
  # WARNING: do not modify; generated code! See generateStatements.py and ../tables/ttProgram.py
+import copy
+import sys
 class root_statement(object):
     def __init__(self):
 	self.vest = None
+	self.host = None
 	self.data = []
         #one instruction may have mutiple successors
         self.successors = [] 
@@ -10,6 +13,20 @@ class root_statement(object):
         self.top = None
         self.id = (0, 0)
 	self.status = 'NORMAL'
+	self.if_block_layer = None
+	self.block_type = 'THEN'
+
+    def __deepcopy__(self,memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+               if not ( k=='predecessor' or k=='successors'):
+                   setattr(result, k, copy.deepcopy(v, memo))
+        return result 
+        
+
+
 
     def add_successor(self,successor):
         self.successors.append(successor)
@@ -285,6 +302,7 @@ class all():
             self.push_num =  0 
             self.pop_num =  0 
             self.total_num = 0
+	    self.IF = None
     class ELSE_Statement(root_statement):
         def __init__(self):
             root_statement.__init__(self) 
@@ -294,6 +312,7 @@ class all():
             self.push_num =  0 
             self.pop_num =  0 
             self.total_num = 0
+	    self.IF = None
     class ENDF_Statement(root_statement):
         def __init__(self):
             root_statement.__init__(self) 
@@ -456,6 +475,7 @@ class all():
             self.pop_num =  1 
             self.total_num = -1
 	    self.IF_ELSE_BLOCK = None
+            self.reverse = False
     class INSTCTRL_Statement(root_statement):
         def __init__(self):
             root_statement.__init__(self) 
@@ -500,6 +520,8 @@ class all():
             self.push_num =  0 
             self.pop_num =  1 
             self.total_num = -1
+	    self.adjust_target = 0
+
     class JROF_Statement(root_statement):
         def __init__(self):
             root_statement.__init__(self) 

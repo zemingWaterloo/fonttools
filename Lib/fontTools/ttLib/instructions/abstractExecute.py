@@ -45,6 +45,8 @@ class Environment(object):
         self.keep_abstract = True
         self.already_seen_jmpr_targets = {}
 
+	
+
     def __repr__(self):
         stackVars = []
         STACK_LIMIT = 6
@@ -85,7 +87,7 @@ class Environment(object):
             environment2.pretty_print()
             self.pretty_print()
         assert len(environment2.program_stack)==len(self.program_stack)
-
+	
         new_stack = []
         for (v1, v2) in zip(self.program_stack, environment2.program_stack):
             if (v1 == v2): 
@@ -214,14 +216,18 @@ class Environment(object):
         op1_val = self.program_stack_pop()
         op2_var = self.stack_top_name()
         op2_val = self.program_stack_pop()
-        op1 = op1_val.eval(self.keep_abstract)
-        op2 = op2_val.eval(self.keep_abstract)
-
+        if isinstance(op1_val.eval(False),int) and isinstance(op2_val.eval(False),int):
+            op1 = op1_val.eval(False)
+            op2 = op2_val.eval(False)
+        else:
+            op1 = op1_val.eval(self.keep_abstract)
+            op2 = op2_val.eval(self.keep_abstract)
         expression = None
         if action is 'MAX' or action is 'MIN':
             e = IR.PrefixBinaryExpression
         else:
             e = IR.InfixBinaryExpression
+
         if isinstance(op1,dataType.AbstractValue) or isinstance(op2,dataType.AbstractValue):
             res = e(op1, op2, action)
             expression = e(op1_var, op2_var, getattr(IR, action+'Operator')())
@@ -229,7 +235,10 @@ class Environment(object):
             res = op1 + op2
             expression = e(op1,op2,IR.ADDOperator())
         elif action is 'SUB':
+            
             res = op1 - op2
+	    if isinstance(op1_val.data,int) and isinstance(op2_val.data,int):
+                res = op1_val.eval(False) - op2_val.eval(False)
             expression = e(op1,op2,IR.SUBOperator())
         elif action is 'GT':
             res = op1 > op2
@@ -247,7 +256,7 @@ class Environment(object):
             res = op1 * op2
             expression = e(op1,op2,IR.MULOperator())
         elif action is 'DIV':
-            res = op1 / op2
+            res = op2 / op1
             expression = e(op1,op2,IR.DIVOperator())
         elif action is 'EQ':
             res = op1 == op2
@@ -301,7 +310,7 @@ class Environment(object):
 
     def exec_AA(self):#AdjustAngle
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_ABS(self):#Absolute
         self.unary_operation('abs')
@@ -314,7 +323,7 @@ class Environment(object):
         move to points, has no further effect on the stack
         '''
         self.program_stack_pop_many(2)
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_ALIGNRP(self):
         loopValue = self.graphics_state['loop']
@@ -345,7 +354,7 @@ class Environment(object):
 
     def exec_DEBUG(self):#DebugCall
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_DELTA(self, op):
         # we need this number concretely to proceed
@@ -377,7 +386,7 @@ class Environment(object):
         # is incorrect in the presence of method calls
         depth = len(self.program_stack)
         self.program_stack_push(depth)
-        raise NotImplementedError
+        #raise NotImplementedError
     
     def exec_DIV(self):#Divide
         self.binary_operation('DIV')
@@ -402,15 +411,15 @@ class Environment(object):
         self.graphics_state['loop'] = 1
         assert len(self.program_stack) >= loopValue, "IP: stack underflow"
         self.program_stack_pop_many(loopValue)
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_FLIPRGOFF(self):
         self.program_stack_pop_many(2)
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_FLIPRGON(self):
         self.program_stack_pop_many(2)
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_FLOOR(self):
         self.unary_operation('floor')
@@ -439,15 +448,27 @@ class Environment(object):
         op = self.program_stack_pop()
         e = IR.GETINFOMethodCall([v])
         res = e.eval(self.keep_abstract)
-        self.program_stack_push(v, False)
+	self.program_stack_push(v, False)
         self.current_instruction_intermediate.append(IR.OperationAssignmentStatement(v, res))
 
     def exec_GPV(self):
-        op1 = self.program_stack[-2]
-        op2 = self.program_stack[-1]
-        self.graphics_state['pv'] = (op1.data,op2.data)
-        self.program_stack_pop_many(2)
-        raise NotImplementedError
+        #op1 = self.program_stack[-2]
+        #op2 = self.program_stack[-1]
+        #self.graphics_state['pv'] = (op1.data,op2.data)
+        #self.program_stack_pop_many(2)
+        #raise NotImplementedError
+	#self.program_stack_push(dataType.EF2Dot14,False);
+	#self.program_stack_push(dataType.EF2Dot14,False)
+        #logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.program_stack))))
+	op1 = self.graphics_state['pv'][0]
+	op2 = self.graphics_state['pv'][1]
+	pv0 = self.program_stack_push(op1)
+	pv1 = self.program_stack_push(op2)
+	self.current_instruction_intermediate.append(IR.CopyStatement(pv0,IR.ProjectionVectorByComponent(0)))
+        self.current_instruction_intermediate.append(IR.CopyStatement(pv1,IR.ProjectionVectorByComponent(1)))
+        logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.program_stack))))
+
+	
 
     def exec_GFV(self):
         op1 = self.graphics_state['fv'][0]
@@ -482,7 +503,7 @@ class Environment(object):
 
     def exec_ISECT(self):
         self.program_stack_pop_many(5)
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_IUP(self): # drawing-only
         self.current_instruction_intermediate.append(IR.IUPMethodCall(self.current_instruction.data[0]))
@@ -500,11 +521,12 @@ class Environment(object):
         # find the instructions and set the PC
         # returns (True, _) if we broke a cycle
         # also returns the jump successor
-
 	## The cross_list records the control flow instructions crossed 
 	flow_control_insts_cross_list = []
         skip_list = []
+        jump_to_return = False
         assert not isinstance(arg, dataType.AbstractValue)
+	print 'jump offset=',arg
         ins = self.fetch_body_for_tag(self.tag).instructions
         pc = 0
         for i in range(len(ins)):
@@ -519,26 +541,30 @@ class Environment(object):
         else:
             dir = 1
             mag = abs(arg)
+	mag += current_instruction.adjust_target
         while mag > 0:
             ci_size = 1
             for d in ins[pc].data:
+	      if not ins[pc].mnemonic in ['SVTCA','SHP']:
                 ci_size += 2 if d.is_word else 1
             mag = mag - ci_size
             pc += dir
+            if pc == len(ins)-1 and mag == 1:
+                jump_to_return = True
+                break
 	    ## catch the crossed control flow instructions
-            
+            print ins[pc],mag 
 	    crossing_instruction = ins[pc]
 	    if crossing_instruction.mnemonic == 'IF' or crossing_instruction.mnemonic == 'ELSE' or crossing_instruction.mnemonic == 'EIF':
 	    	flow_control_insts_cross_list.append(crossing_instruction)
 		skip_list.append(crossing_instruction)
 	    else:
-		    skip_list.append(crossing_instruction)
+		skip_list.append(crossing_instruction)
 		
 
 	target = ins[pc]
-	print target,'target'
         if len(flow_control_insts_cross_list) == 0:
-               print 'WHILE (TRUE):{'
+               print 'while (TRUE){'
                for i in range(1,len(skip_list)):
                    print '    ', skip_list[-i].id,' : ',skip_list[-i]
                print '}'
@@ -586,7 +612,7 @@ class Environment(object):
 
                     flow_control_insts_cross_list = list_stack
 		    num_of_layers_crossed = 0
-		    # count how many layers of if/else crossed caused by this JUMP statement
+		    # count layers jump out
 
 		    for i in range(0,len(flow_control_insts_cross_list)):
 			 flow_control_inst = flow_control_insts_cross_list[-(i+1)]
@@ -599,18 +625,27 @@ class Environment(object):
 
 		    # if num_of_layers_crossed>0,the outer most layer of If/Else block will be regarded as a while loop
                     if num_of_layers_crossed > 0:
+                    # if the it jumps back out 1 or more layers, and crosses some if/else block's ELSE statment
+                      if flow_control_insts_cross_list[-1].mnemonic == 'ELSE':
+                            this_if_stmt = flow_control_inst[-1].IF
+			    this_eif_stmt = this_if_stmt.successors[2]
+                            flow_control_inst[-1].vest = this_eif_stmt
+			    executor.ignored_insts.add(current_instruction)
+                            executor.ignored_insts.add(current_instruction.predecessor)
+                      else:
+ 
 		        # initlize and setup a set of Loop_statement, Endloop_statement and  LoopBlock ir
 		        if_else_block = executor.if_else_stack[-num_of_layers_crossed]
 		        loop_stmt = statements.all.LOOP_Statement()
 		        loop_stmt.id = if_else_block.if_stmt.id
 		     
 		        endloop_stmt = statements.all.ENDLOOP_Statement()
+			endloop_stmt.loop_stmt = loop_stmt
 		        condition = if_else_block.IR.condition
 		        loopIR = IR.LoopBlock(condition,'TRUE',if_else_block.IR.nesting_level)
 		        loop_stmt.LOOP_BLOCK = loopIR
 		        loopIR.statement_id = if_else_block.if_stmt.id
 			executor.ignored_insts.add(current_instruction.predecessor)
-			print 'add ignore:',current_instruction.predecessor
                         # construct instructions list of loop body
 
 	                if if_else_block.IR.mode == 'THEN':
@@ -625,7 +660,7 @@ class Environment(object):
 				# add this part of code into ignored list
 				for i in range(0,upper_index):
 				    executor.ignored_insts.add(if_else_block.IR.if_instructions[i])
-
+			        
 
 
 	                else:
@@ -673,13 +708,14 @@ class Environment(object):
 			target.vest = endloop_stmt
 		        #if_else_block.if_stmt.vest = endloop_stmt
                         while_loop_stack = Executor.While_Loop_stack(loopIR,loop_stmt)
-                        if_else_stack[-num_of_layers_crossed]=while_loop_stack
-                        
+                        # replace the if_else_stack with while_loop_stack
+ 			if_else_stack[-num_of_layers_crossed]=while_loop_stack
+                         
 			
   		        for index in range(0,len(function_instructions_list)):
+			      # replace if statement with the while statement
                               if function_instructions_list[index].id == if_else_block.if_stmt.id:
                                     function_instructions_list[index]=loop_stmt
-			print if_else_block.if_stmt.successors[len(if_else_block.if_stmt.successors)-1].successors[0],' the successor of endloop'
 		        endloop_stmt.successors.append(if_else_block.if_stmt.successors[len(if_else_block.if_stmt.successors)-1].successors[0])
 	
                         # remove the jump instruction and target in this case
@@ -694,7 +730,6 @@ class Environment(object):
 			flag = 0
 			if num_of_layers_crossed > 1:
   			   flag = 1
-
                         for i in range(0,num_of_layers_crossed-1):
                              s = if_else_stack.pop()
                              block = s.IR
@@ -715,13 +750,23 @@ class Environment(object):
 				        if not inst in executor.ignored_insts:
                                             block.else_branch.extend(bytecode2ir[inst.id])
                                  executor.ignored_insts.add(inst)
-
 			     ## append the loop instructions outside of the outer most IF block to the inner most IF/ELSE block
-			     ## if the jump instruction jumps out multiple layers
-			     if flag == 1:
+			     ## if the jump instruction jumps out more than 1 layer
+			     #if  flag == 1:
+			     if  flag :
 				flag = 0
 				k = 1
 				tmp = skip_list[-k]
+                                # the inner if else block should break if
+				# the if condition is not satisfied, the break
+			 	# layer depends on the nested loop level
+			        block.break_indicator = True
+			  	break_layers = 0
+				for i in range(1,num_of_layers_crossed):
+                                    if(isinstance(if_else_stack[-i].IR,IR.LoopBlock)):
+				        break_layers += 1
+				block.break_layer = break_layers
+				
 				while tmp.id != loopIR.statement_id:
 				    if block.mode == 'THEN':
 				        block.if_instructions.append(tmp)
@@ -744,7 +789,7 @@ class Environment(object):
 				elif nested_block.mode == 'ELSE':
 					nested_block.else_instructions.append(s.if_stmt)
 				executor.ignored_insts.add(s.if_stmt)
-                        
+                         
 			# if the jump instruction which jumps backwards does not cross any layer,(even though it crosses some flow control instructions)
 		    else:
 				# if this jump is in an if/else block
@@ -778,10 +823,20 @@ class Environment(object):
 	
  		# if jumps forward
 		if dir == 1:
+		    '''
+		    if target.mnemonic == 'ENDF':
+			print "jump to returnn"
+
+			if len(executor.if_else_stack) > 0:
+			    if_stmt = executor.if_else_stack[-1].if_stmt
+			    if executor.if_else_stack[-1].IR.mode == 'THEN' and len(if_stmt.successors)==3:
+			        target.vest = if_stmt.successors[1]
+			    else:
+				target.vest = if_stmt.successors[-1]
+ 		    '''
 		    # remove all pairs of (IF,EIF,(ELSE)) the jump insturction crossed as when dir == -1
 		    num_of_layers_crossed = 0
 		    list_stack = []
-                    print flow_control_insts_cross_list
 	  	    for i in range(0,len(flow_control_insts_cross_list)):
 			list_stack.append(flow_control_insts_cross_list[i])
 			while len(list_stack) > 1:
@@ -799,12 +854,11 @@ class Environment(object):
 				else:
 				     break 
                     flow_control_insts_cross_list = list_stack
-
 		    for i in flow_control_insts_cross_list:
 			if i.mnemonic == 'EIF':
 			    num_of_layers_crossed += 1
 
-                    if num_of_layers_crossed == 0:
+                    if num_of_layers_crossed == 0 and (not target.mnemonic == 'ENDF'):
 		        if in_block:
 			    # does not jump out any layer,but crosses its own else
 			    for i in range(0,len(flow_control_insts_cross_list)):
@@ -818,11 +872,13 @@ class Environment(object):
 			if in_block:
 			    s = if_else_stack[-1].if_stmt
 			    target.vest = s.successors[len(s.successors)-1]
-                            executor.ignored_insts.add(current_instruction.predecessor)
-                        
-                        if num_of_layers_crossed > 0:
+                            #executor.ignored_insts.add(current_instruction.predecessor)
+                        if num_of_layers_crossed > 0 or target.mnemonic == 'ENDF':
+			    print 'here',len(if_else_stack),num_of_layers_crossed
+			    print if_else_stack[-num_of_layers_crossed].if_stmt.id
                             if if_else_stack[-num_of_layers_crossed].IR.mode == 'THEN':
-                                if len(s.successors) == 2:
+                                # if len(s.successors) == 2
+                                if len(if_else_stack[-num_of_layers_crossed].if_stmt.successors) == 2:
                                     ghost_else = statements.all.ELSE_Statement()
                                     eif = executor.if_else_stack[-num_of_layers_crossed].if_stmt.successors[-1]
                                     If = executor.if_else_stack[-num_of_layers_crossed].if_stmt
@@ -833,7 +889,6 @@ class Environment(object):
                                     if len(If.successors)==2:
                                         If.successors[1]=ghost_else
                                         If.successors.append(eif)
-
 			            if num_of_layers_crossed == 1:
 				        target.vest = ghost_else
 			            else:              
@@ -852,28 +907,44 @@ class Environment(object):
 					while itr.successors[0].id != eif_stmt.id:
 					    itr = itr.successors[0]
 					itr.successors[0] = eif_stmt.successors[0]
-                                        target.predecessor.successors[0]=eif_stmt
-					eif_stmt.successors[0]=target
-
+					print itr,eif_stmt.successors[0]	
+					# avoid eif successor of jump
+					if target.predecessor.mnemonic == 'JMPR':
+					    #target.predecessor.predecessor.successors[0] = eif_stmt
+					         ## default operation: return the function
+				            #executor.if_else_stack[-1].IR.rtn_if = True
+					    print 'jump to before a jump'
+					else:
+					    if jump_to_return:
+						print 'jump to return'
+					    	target.successors.append(eif_stmt)
+					    else:
+						target.predecessor.successors[0] = eif_stmt
+					if not jump_to_return:
+					    eif_stmt.successors[0]=target
+                                        else:
+					    eif_stmt.successors.pop()
 					if num_of_layers_crossed == 1:
+					    print 'number of layers crossed = 1'
 					    target.vest = else_stmt
+					    ghost_ENDF = statements.all.ENDF_Statement()
+					    ghost_ENDF.id = 'ghost_ENDF'
+					    target.vest.vest = ghost_ENDF
+					    target.vest.host = target
 					else:
 					    if len(executor.if_else_stack[-1].if_stmt.successors) == 2 or executor.if_else_stack[-1].IR.mode == 'ELSE':
 					       target.vest = if_else_stack[-1].if_stmt.successors[-1]
 					    else:
 					       target.vest = if_else_stack[-1].if_stmt.successors[1]
 					    eif_stmt.vest = else_stmt
-
-					executor.ignored_insts.add(current_instruction.predecessor)
-					executor.ignored_insts.add(current_instruction)
+					#executor.ignored_insts.add(current_instruction.predecessor)
+					#executor.ignored_insts.add(current_instruction)
                             else:
-					print 'check,,,,,'
 					if_stmt = executor.if_else_stack[-num_of_layers_crossed].if_stmt
 					else_stmt = if_stmt.successors[1]
 					eif_stmt = if_stmt.successors[2]
 					# 1.restore the environment to the env right before else
 					executor.environment = copy.deepcopy(executor.if_else_stack[-num_of_layers_crossed].env_on_exit)
-					print executor.environment
 					vest = statements.all.RESTORE_AND_SETVEST_Statement()
 					vest.env_id = current_instruction.id
 					setvest = None
@@ -885,9 +956,35 @@ class Environment(object):
 					tmp = eif_stmt.successors[0]
 					eif_stmt.successors[0] = target
 					target.vest = vest
+					itr = tmp
+					tmp_stack = []	
+					while not itr.id==target.id:
+						if len(tmp_stack)==0:
+						     
+						     itr.if_block_layer = num_of_layers_crossed
+						     if itr.mnemonic == 'IF':
+							itr.if_block_layer += 1
+						     if target.mnemonic == 'ENDF':
+							print 'add one to if block layer',itr
+							itr.if_block_layer += 1 
+						if itr.mnemonic == 'IF' or itr.mnemonic=='ELSE' or itr.mnemonic=='EIF':
+						     tmp_stack.append(itr)
+						if len(tmp_stack)>1:
+						     if tmp_stack[-1].mnemonic == 'EIF' and tmp_stack[-2].mnemonic == 'IF':
+							tmp_stack.pop()
+							tmp_stack.pop()
+						     else:
+							if len(tmp_stack)>2:
+							    if tmp_stack[-1].mnemonic == 'EIF' and tmp_stack[-1].mnemonic == 'ELSE' and tmp_stack[-1].mnemonic == 'IF':
+								tmp_stack.pop()
+								tmp_stack.pop()
+								tmp_stack.pop()
+						itr = itr.successors[0]
+
+
 					target = tmp
-					
-					print 'target=',target,'setvest=',setvest
+										
+			
 
         logger.info("relative jump target is %s" % ins[pc])
 
@@ -900,6 +997,8 @@ class Environment(object):
                 self.already_seen_jmpr_targets[self.tag].append(target)
             else:
                 return target
+	if len(target.successors)>0:
+	    print 'the next of jump target:',target.successors[0],target.successors[0].id
         return target
 
     def exec_ENDLOOP(self):
@@ -1013,6 +1112,7 @@ class Environment(object):
         op = self.program_stack_pop().eval(self.keep_abstract)
         # XXX should be done from dataType & eval
         # or, we could accept that we basically never really know the CVT table.
+	
         res_var = IR.ReadFromIndexedStorage("cvt_table", op)
         if self.keep_abstract or isinstance(op, dataType.AbstractValue):
             res = IR.ReadFromIndexedStorage("cvt_table", op)
@@ -1027,8 +1127,8 @@ class Environment(object):
         self.current_instruction_intermediate.append(IR.CopyStatement(IR.RoundState(), dataType.RoundState_DTG()))
 
     def exec_ROFF(self):
-        raise NotImplementedError
-
+        #raise NotImplementedError
+	pass
     def exec_ROLL(self):
         tmp = self.program_stack[-1]
         self.program_stack[-1] = self.program_stack[-3]
@@ -1078,11 +1178,11 @@ class Environment(object):
 
     def exec_S45ROUND(self):
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_SANGW(self):
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_SCANCTRL(self):
         value = self.program_stack[-1].data
@@ -1096,7 +1196,7 @@ class Environment(object):
 
     def exec_SCVTCI(self):
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_SDB(self):
         arg = self.program_stack_pop()
@@ -1112,10 +1212,10 @@ class Environment(object):
 
     def exec_SFVFS(self):
         args = self.program_stack_pop_many(2)
-        self.current_instruction_intermediate.append(IR.SFVFSMethodCall([arg]))
+        self.current_instruction_intermediate.append(IR.SFVFSMethodCall([args]))
 
     def exec_SFVTCA(self):
-        data = int(self.current_instruction.data[0])
+        data = int(self.current_instruction.data[0].value)
         assert (data is 1 or data is 0)
         if data == 0:
             self.graphics_state['fv'] = (0, 1)
@@ -1129,7 +1229,7 @@ class Environment(object):
 
     def exec_SFVTPV(self):#Set Freedom Vector To Projection Vector
         self.graphics_state['fv'] = self.graphics_state['pv']
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_SHC(self):
         arg = self.program_stack_pop()
@@ -1140,6 +1240,7 @@ class Environment(object):
         self.graphics_state['loop'] = 1
         assert len(self.program_stack) >= loopValue, "IP: stack underflow"
         pts = self.program_stack_pop_many(loopValue)
+	print "loopvalue",loopValue
         self.current_instruction_intermediate.append(IR.SHPMethodCall(self.current_instruction.data[0], pts))
 
     def exec_SHPIX(self):
@@ -1155,7 +1256,7 @@ class Environment(object):
         self.current_instruction_intermediate.append(IR.SHZMethodCall(self.current_instruction.data[0], [arg]))
   
     def exec_SLOOP(self):
-        self.graphics_state['loop'] = self.program_stack[-1].data.value
+        self.graphics_state['loop'] = self.program_stack[-1].data
         arg = self.program_stack_pop()
         self.current_instruction_intermediate.append(IR.SLOOPMethodCall([arg]))
 
@@ -1165,7 +1266,7 @@ class Environment(object):
 
     def exec_SPVFS(self):
         self.program_stack_pop_many(2)
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_SPVTCA(self):
         data = int(self.current_instruction.data[0].value)
@@ -1177,8 +1278,8 @@ class Environment(object):
         self.current_instruction_intermediate.append(IR.CopyStatement(IR.ProjectionVector(),IR.Constant(data)))
 
     def exec_SPVTL(self):
-        self.program_stack_pop_many()
-        raise NotImplementedError
+        self.program_stack_pop_many(2)
+        #raise NotImplementedError
 
     def exec_S45ROUND(self):
         arg = dataType.RoundState_Super45(self.program_stack_pop().eval(self.keep_abstract))
@@ -1197,7 +1298,7 @@ class Environment(object):
 
     def exec_SSWCI(self):
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_SUB(self):
         self.binary_operation('SUB')
@@ -1255,7 +1356,7 @@ class Environment(object):
 
     def exec_UTP(self):
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
 
     def exec_WCVTF(self):
         self.exec_WCVTP()
@@ -1298,7 +1399,7 @@ class Environment(object):
 
     def exec_SANGW(self):
         self.program_stack_pop()
-        raise NotImplementedError
+        #raise NotImplementedError
     
     def exec_SCFS(self):
         args = self.program_stack_pop_many(2)
@@ -1334,8 +1435,29 @@ class Executor(object):
     Produces a new global state accounting for the effects of that
     instruction. Modifies the stack, CVT table, and storage area.
     """
+    class Uncertain_Callee_Backup(object):
+        def __init__(self):
+            self.backup_executor_status = None
+            self.function_itr = 0
+            self.call_stack = []
+	    self.possible_functions = []
+	    self.program_stack_backup = []
+            self.largest_function = -1
+	    self.in_test_function = 0	    
+
+        def find_largest_func(self,bytecodeContainer):
+            largest = -1
+            for key,value in bytecodeContainer.function_table.items(): 
+        	if key>largest:
+                    largest = key
+
+            return largest
+            
+
+
     def __init__(self,bc):
         self.bytecodeContainer = bc
+	self.replace_uncertain_function = -1
         self.environment = Environment(bc, "")
         self.current_instruction = None
         self.maximum_stack_depth = 0
@@ -1351,6 +1473,34 @@ class Executor(object):
         self.already_seen_insts = set()
         self.ignored_insts = set()
 	self.current_execution_stream = None
+        # encounter an uncertain callee
+        self.uncertain_callee_backup = None
+	self.call24 = 0 
+
+    def __deepcopy__(self,memo):
+        cls = self.__class__
+        result = cls.__new__(cls) 
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+	    if not ( k in {'bytecodeContainer','uncertain_callee_backup','global_function_table','breadcrumbs','breadcrumbs_if_else_stack'}):
+		if k=='call_stack':
+		     print 'copying call_stack',type(v)
+		     print type(v[0])
+		     setattr(result,k,copy.copy(v))
+		else:
+	          setattr(result, k, copy.deepcopy(v, memo))
+        
+	return result 
+
+    def num_pop(self,inst):
+        dictionary = {'POP':1,'DELTAP1':200}
+	if inst.mnemonic in dictionary:
+	    if dictionary[inst.mnemonic] > 99:
+		return 1 + self.environment.program_stack[-1].eval(False) * int(dictionary[inst.mnemonic]) / 100
+	    else:
+	        return dictionary[inst.mnemonic]
+        else:
+	    return 0
 
     def graphics_state_initialization_code(self):
         return [
@@ -1403,6 +1553,7 @@ class Executor(object):
         return self.environment.stack_depth()
 
     def execute_LOOPCALL(self):
+	print 'loopcall:',self.current_instruction.successors[0].id
         count = self.environment.program_stack[-2].eval(False)
         if isinstance(count, dataType.AbstractValue):
             # oops. execute once, hope it doesn't modify the stack.
@@ -1414,7 +1565,107 @@ class Executor(object):
     def execute_CALL(self, repeats=1):
         # actually we *always* want to get the concrete callee
         callee = self.environment.program_stack[-1].eval(False)
+	print 'calling function',callee
+	if callee == 24:
+	    self.call24 += 1
+	    print "call 24:",self.call24
+	   
+	if isinstance(callee,dataType.AbstractValue):
+		callee = 8
+	if isinstance(callee,dataType.AbstractValue):
+            if self.uncertain_callee_backup == None:
+	      if self.replace_uncertain_function > -1:
+		    callee = self.replace_uncertain_function
+	      else:
+		print 'uncertain callee:',callee
+		print 'creating backup executor status...'
+                backup = Executor.Uncertain_Callee_Backup()
+		backup.backup_executor_status = copy.deepcopy(self)
+		self.uncertain_callee_backup = backup
+		backup.backup_executor_status.current_instruction.successors = self.current_instruction.successors
+		backup.backup_executor_status.current_instruction.predecessor = self.current_instruction.predecessor
+		for i in range(0,len(self.call_stack)):
+
+		     new_if_else_stack = backup.backup_executor_status.call_stack[i][8]
+
+		     for j in range(0,len(new_if_else_stack)):
+		         new_if_else_stack[j].if_stmt = self.call_stack[i][8][j].if_stmt
+ 
+		     oldtuple = backup.backup_executor_status.call_stack[i]
+		     newtuple = (oldtuple[0],self.call_stack[i][1],self.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+		     backup.backup_executor_status.call_stack[i] = newtuple 
+		     backup.call_stack.append(self.call_stack[i][0])
+                backup.largest_function = backup.find_largest_func(self.bytecodeContainer)
+		callee = backup.function_itr
+		while callee in backup.call_stack:
+		    backup.function_itr += 1
+		    callee = backup.function_itr
+
+		print 'trying function:',callee
+		
+		print 'size of if else stack:',len(self.if_else_stack)
+	    else:
+		callee = self.uncertain_callee_backup.function_itr
+                if self.uncertain_callee_backup.largest_function < callee:
+		    if len(self.uncertain_callee_backup.possible_functions)>0:
+		        callee = self.uncertain_callee_backup.possible_functions[0]
+			print "possible functions:",self.uncertain_callee_backup.possible_functions
+			self.uncertain_callee_backup = None
+			self.replace_uncertain_function = callee
+			
+                    else:
+			print 'error: no possible function'
+			sys.exit()
+                    self.uncertain_callee = None
+			           
+		if not self.uncertain_callee_backup is None:
+		 while callee in self.uncertain_callee_backup.call_stack or (not callee in self.bytecodeContainer.function_table):
+		    print callee , 'not in table'
+		    self.uncertain_callee_backup.function_itr += 1
+		    callee = self.uncertain_callee_backup.function_itr
+		print 'trying function:',callee
+                #self.uncertain_callee_backup.function_itr += 1
+		print 'size of if else stack:',len(self.if_else_stack)
+	    if not self.uncertain_callee_backup is None:
+	        self.uncertain_callee_backup.in_test_function = 1
+
+            #callee = 7
         assert not isinstance(callee, dataType.AbstractValue)
+        if not self.uncertain_callee_backup is None:  
+	    print self.uncertain_callee_backup.call_stack
+ 
+            
+            if callee in self.uncertain_callee_backup.call_stack and self.uncertain_callee_backup.in_test_function :
+                  print 'from exe CALL:this function does not work,restore executor status...'
+
+                  self.environment = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.environment)
+                  self.if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.if_else_stack)
+                  for i in range(0,len(self.if_else_stack)):
+                        self.if_else_stack[i].if_stmt.successors = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.successors
+                        self.if_else_stack[i].if_stmt.predecessor = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.predecessor
+
+                  self.current_instruction = self.uncertain_callee_backup.backup_executor_status.current_instruction
+                  self.maximum_stack_depth = self.uncertain_callee_backup.backup_executor_status.maximum_stack_depth
+                  self.call_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack)
+                  for i in range(0,len(self.uncertain_callee_backup.backup_executor_status.call_stack)):
+
+                     new_if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack[i][8])
+
+                     for j in range(0,len(new_if_else_stack)):
+                         new_if_else_stack[j].if_stmt = self.uncertain_callee_backup.backup_executor_status.call_stack[i][8][j].if_stmt
+
+                     oldtuple = self.call_stack[i]
+                     newtuple = (oldtuple[0],self.uncertain_callee_backup.backup_executor_status.call_stack[i][1],self.uncertain_callee_backup.backup_executor_status.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+                     self.call_stack[i] = newtuple
+
+
+                  self.visited_functions = self.uncertain_callee_backup.backup_executor_status.visited_functions
+                  self.bytecode2ir = self.uncertain_callee_backup.backup_executor_status.bytecode2ir
+                  self.already_seen_insts = self.uncertain_callee_backup.backup_executor_status.already_seen_insts
+                  self.uncertain_callee_backup.function_itr += 1
+                  return
+
+
 
         # update call graph counts
         self.visited_functions.add(callee)
@@ -1444,26 +1695,27 @@ class Executor(object):
         self.environment.tag = "fpgm_%s" % callee
         self.environment.replace_locals_with_formals()
         self.stored_environments = {}
-	
 
     def execute_RETURN(self, tag):
-	for inst in self.ignored_insts:
-	    print 'ignored:',inst,' ',inst.id
+	if not  self.uncertain_callee_backup is None:
+	    if self.uncertain_callee_backup.in_test_function == 1:
+		self.uncertain_callee_backup.in_test_function = 0
+
         tag_returned_from = self.environment.tag
         (callee, previous_instruction, self.current_instruction,
          self.environment.tag, caller_program_stack, self.stored_environments, self.breadcrumbs,
          self.breadcrumbs_if_else_stack, self.if_else_stack, repeats) = self.call_stack.pop()
+        #if not self.current_instruction == None:
+	#    print 'exec return pop stack:',self.current_instruction,self.current_instruction.id
         if tag_returned_from in self.visited_functions:
             # calling a function for a second time
             # assert that stored instructions == bytecodeContainer.IRs[tag]
             pass
         else:
             intermediateCodes = []
-	    print 'print from return :',self.bytecodeContainer.function_table[callee].instructions
             for inst in self.bytecodeContainer.function_table[callee].instructions:
 		## If this instruction is IF, append the corresponding IR.IF_ELSE_BLOCK to IntermediateCodes
                 if inst not in self.ignored_insts and inst.id in self.bytecode2ir:
-		    print 'inst:',inst,'is not in ignored insts'
 		    if inst.mnemonic == 'IF':
 			intermediateCodes.append(inst.If_Else_Block)
 		    if inst.mnemonic == 'LOOP':
@@ -1478,16 +1730,56 @@ class Executor(object):
         stack_used = stack_depth_upon_call - self.environment.minimum_stack_depth
         stack_additional = self.stack_depth() - stack_depth_upon_call
         #self.environment.program_stack = caller_program_stack
-        for iter in range(repeats):
-            if stack_additional > 0:
-                for i in range(stack_additional):
+
+        if(repeats > 1):
+	    # reset the cur instruction if it's loop call
+	    self.current_instruction = self.current_instruction.predecessor
+	    #print 'repeating function'
+	    repeats -= 1
+            # update call graph counts
+            self.visited_functions.add(callee)
+            if callee not in self.global_function_table:
+                self.global_function_table[callee] = 1
+            else:
+                self.global_function_table[callee] += 1
+
+            # execute the call instruction itself
+            #self.environment.execute_current_instruction(self.current_instruction)
+
+            self.environment.minimum_stack_depth = self.stack_depth()
+            # set call stack & jump
+            # yuck should regularize the CFG with tail nodes to avoid needing this hack
+            if (len(self.current_instruction.successors) == 0):
+                succ = None
+            else:
+                succ = self.current_instruction.successors[0]
+            self.call_stack.append((callee, self.current_instruction, succ,
+                                self.environment.tag, copy.copy(self.environment.program_stack),
+                                self.stored_environments, self.breadcrumbs, self.breadcrumbs_if_else_stack, self.if_else_stack, repeats))
+            self.if_else_stack = []
+            logger.info("in %s, calling function %d" % (self.environment.tag, callee))
+            assert callee in self.bytecodeContainer.function_table, "Callee function #%s not defined" % callee
+            self.current_instruction = self.bytecodeContainer.function_table[callee].start()
+            self.current_execution_stream = self.bytecodeContainer.function_table[callee].execution_stream
+            self.environment.tag = "fpgm_%s" % callee
+            self.environment.replace_locals_with_formals()
+            self.stored_environments = {}
+
+
+
+        '''
+        for iter in range(repeats-1):
+            if abs(stack_additional) > 0:
+		print 'stack_additional',stack_additional
+                for i in range(abs(stack_additional)):
                     rv_val = dataType.AbstractValue()
                     rv = IR.Variable("$rv%d" % i, rv_val)
                     self.environment.program_stack_push(rv_val, False, rv)
-                    if stack_additional < 0:
+                    if stack_additional > 0:
                         for i in range(-stack_additional):
+			    print 'pop'
                             self.environment.program_stack.pop()
-
+	'''
         call_args = '('
         for i in range(stack_used):
             if i > 0:
@@ -1515,7 +1807,7 @@ class Executor(object):
 
         logger.info("pop call stack, next is %s", str(self.current_instruction))
         logger.info("stack used %d/stack additional %d" % (stack_used, stack_additional))
-
+       
     def fixupDestsToIR(self, ic):
         for inst in self.bytecodeContainer.flatten_IR(ic):
             if isinstance(inst, IR.JROxStatement) or isinstance(inst, IR.JmpStatement):
@@ -1527,11 +1819,23 @@ class Executor(object):
         if not already_seen_this_inst:
             self.bytecode2ir[current_instruction.id] = ir
             self.already_seen_insts.add(current_instruction.id)
-        if len(self.if_else_stack) > 0:
-            if_else_block = self.if_else_stack[-1]
+	print 'appending ir code',current_instruction
+        if len(self.if_else_stack) > 0 and not already_seen_this_inst:
+	    print 'has if else block'
+            if_else_block = None
+	    if current_instruction.if_block_layer != None:
+		if_else_block = self.if_else_stack[-current_instruction.if_block_layer]
+	    else:
+		if_else_block = self.if_else_stack[-1]
 	    if isinstance(if_else_block,self.If_else_stack):
 	       block=if_else_block.IR
                if not already_seen_this_inst:
+		 if current_instruction.if_block_layer != None:
+                   if current_instruction.block_type == 'THEN':
+                       block.if_instructions.append(current_instruction)
+		   else:
+                       block.else_instructions.append(current_instruction)
+                 else:
                    if block.mode == 'ELSE':
                        block.else_instructions.append(current_instruction)
                    else:
@@ -1539,6 +1843,27 @@ class Executor(object):
     
     def setIRForBytecodeInExecutionStream(self,current_instruction,ir):
          self.execution_stream.append((copy.deepcopy(current_instruction),ir))
+ 
+#    def print_all_functions(self):
+#        counter = 0
+#        for key in self.bytecodeContainer.tag_to_programs.keys():
+#            program = self.bytecodeContainer.tag_to_programs[key]
+#            counter += 1
+#	    if not key == 'fpgm':
+#               print 'function',counter, ' : ',key
+#               for inst in program.body.instructions:
+#                   print inst,inst.id
+#               print ' '
+#        print '\n\n\n'
+#        print type(self.bytecodeContainer.function_table)
+#        for key in self.bytecodeContainer.function_table.keys():
+#            program = self.bytecodeContainer.function_table[key]
+#            print 'function : ',key
+#            for inst in program.body.instructions:
+#                print inst,inst.id
+#            print ' '
+#        print '\n\n\n'
+#        sys.exit()
 
 
 
@@ -1549,21 +1874,107 @@ class Executor(object):
         self.current_instruction = program.start()
         self.if_else_stack = []
         self.environment.minimum_stack_depth = 0
+	insts = program.body.instructions
+
+        while  self.current_instruction is not  None:
+
+	    holder = self.current_instruction
+	    while self.current_instruction.vest is not  None:
+		#print self.current_instruction,self.current_instruction.vest,"vest!!"
+		holder = self.current_instruction
+		self.current_instruction = self.current_instruction.vest 
+	    holder.vest = None
+
+	    if self.current_instruction.host is not None:
+		self.current_instruction.host.vest = None
+
+
+	    if not self.uncertain_callee_backup is None:
+                if self.current_instruction.mnemonic in ['SZP0','SZP1','SZP2']:
+            	    if not (self.environment.program_stack[-1] is 0 or self.environment.program_stack[-1] is 1):
+
+                        print 'this function does not work,restore executor status...'
+                        self.environment = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.environment)
+                        self.if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.if_else_stack)
+                        for i in range(0,len(self.if_else_stack)):
+                              self.if_else_stack[i].if_stmt.successors = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.successors
+                              self.if_else_stack[i].if_stmt.predecessor = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.predecessor
+
+                        self.current_instruction = self.uncertain_callee_backup.backup_executor_status.current_instruction
+                        self.maximum_stack_depth = self.uncertain_callee_backup.backup_executor_status.maximum_stack_depth
+                        self.call_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack)
+                        for i in range(0,len(self.uncertain_callee_backup.backup_executor_status.call_stack)):
+
+                           new_if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack[i][8])
+
+                           for j in range(0,len(new_if_else_stack)):
+                               new_if_else_stack[j].if_stmt = self.uncertain_callee_backup.backup_executor_status.call_stack[i][8][j].if_stmt
+
+                           oldtuple = self.call_stack[i]
+                           newtuple = (oldtuple[0],self.uncertain_callee_backup.backup_executor_status.call_stack[i][1],self.uncertain_callee_backup.backup_executor_status.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+                           self.call_stack[i] = newtuple
+
+
+                        self.visited_functions = self.uncertain_callee_backup.backup_executor_status.visited_functions
+                        self.bytecode2ir = self.uncertain_callee_backup.backup_executor_status.bytecode2ir
+                        self.already_seen_insts = self.uncertain_callee_backup.backup_executor_status.already_seen_insts
+                        self.uncertain_callee_backup.function_itr += 1
+                        continue
+
         
 
 
-        while self.current_instruction is not None:
+	    if len(self.environment.program_stack)<self.num_pop(self.current_instruction) and (not self.uncertain_callee_backup is None):
+                  print 'this function does not work,restore executor status...'
+                  self.environment = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.environment)
+                  self.if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.if_else_stack)
+		  for i in range(0,len(self.if_else_stack)):
+			self.if_else_stack[i].if_stmt.successors = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.successors
+			self.if_else_stack[i].if_stmt.predecessor = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.predecessor
 
-	    if self.current_instruction.vest != None:
-		tmp=self.current_instruction
-		self.current_instruction = self.current_instruction.vest
-		tmp.vest = None
+		  self.current_instruction = self.uncertain_callee_backup.backup_executor_status.current_instruction
+                  self.maximum_stack_depth = self.uncertain_callee_backup.backup_executor_status.maximum_stack_depth
+                  self.call_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack)
+                  for i in range(0,len(self.uncertain_callee_backup.backup_executor_status.call_stack)):
+
+                     new_if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack[i][8])
+
+                     for j in range(0,len(new_if_else_stack)):
+                         new_if_else_stack[j].if_stmt = self.uncertain_callee_backup.backup_executor_status.call_stack[i][8][j].if_stmt
+
+                     oldtuple = self.call_stack[i]
+                     newtuple = (oldtuple[0],self.uncertain_callee_backup.backup_executor_status.call_stack[i][1],self.uncertain_callee_backup.backup_executor_status.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+                     self.call_stack[i] = newtuple
+
+
+                  self.visited_functions = self.uncertain_callee_backup.backup_executor_status.visited_functions
+                  self.bytecode2ir = self.uncertain_callee_backup.backup_executor_status.bytecode2ir
+                  self.already_seen_insts = self.uncertain_callee_backup.backup_executor_status.already_seen_insts
+                  self.uncertain_callee_backup.function_itr += 1
+                  continue
+
+
+
+
+	    #if self.current_instruction.vest != None:
+		
+	    #	tmp=self.current_instruction
+            #   self.current_instruction = self.current_instruction.vest
+	    #	tmp.vest = None
+
+	    if self.current_instruction.mnemonic == 'ENDF' and self.current_instruction.id == 'ghost_ENDF':
+                if len(self.if_else_stack) > 0:
+		    if self.if_else_stack[-1].IR.mode == 'THEN':
+			self.if_else_stack[-1].IR.if_branch.append("RET")
+		    else:
+			self.if_else_stack[-1].IR.else_branch.append("RET")
+		self.current_instruction = holder
+		continue
 
 	    if self.current_instruction.mnemonic == 'RASV':
 		self.environment = copy.deepcopy(self.stored_environments[self.current_instruction.env_id])
 		self.environment.program_stack.pop()
 		self.current_instruction = self.current_instruction.setvest
-		print 'current -inst = !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',self.current_instruction	
                 
 
             logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.environment.program_stack))))
@@ -1573,9 +1984,38 @@ class Executor(object):
                 logger.info("[pc] %s->%s",self.current_instruction.id,self.current_instruction.mnemonic)
             logger.info("     succs are %s", self.current_instruction.successors)
             logger.info("     call_stack len is %s", len(self.call_stack))
-
             if self.current_instruction.mnemonic == 'CALL':
-                self.execute_CALL()
+	        if not isinstance(self.environment.program_stack[-1].eval(False),dataType.AbstractValue):
+		    if not self.environment.program_stack[-1].eval(False) in self.bytecodeContainer.function_table:
+			print 'this function does not work,restore executor status.function not defined'
+                        self.environment = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.environment)
+                        self.if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.if_else_stack)
+                        for i in range(0,len(self.if_else_stack)):
+                              self.if_else_stack[i].if_stmt.successors = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.successors
+                              self.if_else_stack[i].if_stmt.predecessor = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.predecessor
+
+			self.current_instruction = self.uncertain_callee_backup.backup_executor_status.current_instruction
+                        self.maximum_stack_depth = self.uncertain_callee_backup.backup_executor_status.maximum_stack_depth
+                        self.call_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack)
+                        
+                        for i in range(0,len(self.uncertain_callee_backup.backup_executor_status.call_stack)):
+
+                             new_if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack[i][8])
+
+                             for j in range(0,len(new_if_else_stack)):
+                                 new_if_else_stack[j].if_stmt = self.uncertain_callee_backup.backup_executor_status.call_stack[i][8][j].if_stmt
+
+                             oldtuple = self.call_stack[i]
+                             newtuple = (oldtuple[0],self.uncertain_callee_backup.backup_executor_status.call_stack[i][1],self.uncertain_callee_backup.backup_executor_status.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+                             self.call_stack[i] = newtuple
+ 
+			self.visited_functions = self.uncertain_callee_backup.backup_executor_status.visited_functions
+                        self.bytecode2ir = self.uncertain_callee_backup.backup_executor_status.bytecode2ir
+                        self.already_seen_insts = self.uncertain_callee_backup.backup_executor_status.already_seen_insts
+                        self.uncertain_callee_backup.function_itr += 1
+                        continue
+
+		self.execute_CALL()
                 continue
             elif self.current_instruction.mnemonic == 'LOOPCALL':
                 self.execute_LOOPCALL()
@@ -1594,6 +2034,81 @@ class Executor(object):
             ir = []
             is_reexecuting = False
             store_env = True
+
+            if self.current_instruction.mnemonic == 'JROT' or self.current_instruction.mnemonic == 'JROF':
+		instructions = program.body.instructions
+		if len(self.call_stack)>0:
+                    instructions = self.bytecodeContainer.function_table[self.call_stack[-1][0]].instructions
+
+
+                if_statement = statements.all.IF_Statement()
+                jump_statement = statements.all.JMPR_Statement()
+                if self.current_instruction.mnemonic == 'JROF':
+                    if_statement.reverse = True
+		else_statement = statements.all.ELSE_Statement()
+		pop_statement = statements.all.POP_Statement()
+                eif_statement = statements.all.EIF_Statement()
+                import re
+                cur_id = next(re.finditer(r'\d+$', self.current_instruction.id)).group(0)
+                prefix = self.current_instruction.id[:len(self.current_instruction.id)-len(cur_id)]
+                cur_id = int(next(re.finditer(r'\d+$', self.current_instruction.id)).group(0))
+                if_statement.id = self.current_instruction.id
+                jump_statement.id = prefix + str(cur_id+1)
+		else_statement.id = prefix + str(cur_id+2)
+		pop_statement.id = prefix + str(cur_id+3)
+	        eif_statement.id = prefix + str(cur_id+4)	
+
+                self.current_instruction.predecessor.successors[0] = if_statement
+                if_statement.add_successor(jump_statement)
+                if_statement.add_successor(else_statement)
+		if_statement.add_successor(eif_statement)
+                jump_statement.add_successor(else_statement)
+		else_statement.add_successor(pop_statement)
+		pop_statement.add_successor(eif_statement)
+                eif_statement.add_successor(self.current_instruction.successors[0])
+
+                eif_statement.set_predecessor(if_statement)
+		else_statement.set_predecessor(if_statement)
+                jump_statement.set_predecessor(if_statement)
+		pop_statement.set_predecessor(else_statement)
+                if_statement.predecessor = self.current_instruction.predecessor
+                self.current_instruction.successors[0].set_predecessor(eif_statement)
+
+#		itr = self.current_instruction.predecessor
+
+#                inst_itr = self.current_instruction.successors[0]
+#  		count = 1
+#                while not inst_itr == None:
+#                    old_id = int(next(re.finditer(r'\d+$', self.current_instruction.id)).group(0))
+#                    new_id = prefix + str(old_id+4+count)
+#                    inst_itr.id = new_id
+#		    count += 1
+#                    if len(inst_itr.successors) > 0:
+#                         inst_itr = inst_itr.successors[0]
+#                    else:
+#                         inst_itr = None
+
+#                self.current_instruction = if_statement
+		instructions = program.body.instructions
+	        if len(self.call_stack) > 0:
+		    instructions = self.bytecodeContainer.function_table[self.call_stack[-1][0]].instructions
+	
+		start_id =  int(next(re.finditer(r'\d+$', instructions[0].id)).group(0))
+		cur_id -= start_id
+		instructions.remove(self.current_instruction)
+		instructions.insert(cur_id , if_statement)
+		instructions.insert(cur_id+1,jump_statement)
+		instructions.insert(cur_id+2,else_statement)
+		instructions.insert(cur_id+3,pop_statement)
+		instructions.insert(cur_id+4,eif_statement)
+                for i in range(0,len(instructions)):
+		    instructions[i].id = prefix + str(start_id + i)
+
+		self.current_instruction = if_statement
+
+ 		jump_statement.adjust_target += 3;
+		continue
+
 
             if self.current_instruction.mnemonic == 'IF':
                 if len(self.if_else_stack) > 0 and self.if_else_stack[-1].if_stmt == self.current_instruction and self.if_else_stack[-1].state > 0:
@@ -1621,6 +2136,7 @@ class Executor(object):
                     newBlock = IR.IfElseBlock(cond,
                                               len(self.if_else_stack) + 1)
 		    self.current_instruction.If_Else_Block = newBlock
+                    newBlock.reverse = self.current_instruction.reverse
 
                     self.if_else_stack.append(self.If_else_stack(newBlock, self.current_instruction, 0))
 
@@ -1630,36 +2146,44 @@ class Executor(object):
                 block.mode = 'ELSE'
             
 
-            # skip an instruction with SKIP status,and reset the status to NORMAL
-	    elif self.current_instruction.mnemonic == 'EIF':
-		if self.current_instruction.status == 'SKIP':
-			self.current_instruction.status = 'NORMAL'
-			self.current_instruction = self.current_instruction.successors[0]
-
-
-
 
 	    if store_env:
                 if not is_reexecuting and self.current_instruction.id in self.stored_environments:
 		    ## If the same EIF is pointed for the second time,the current env should not be merged with
 		    ## the env of EIF
-		    if self.current_instruction.mnemonic != 'EIF': 
-		     self.environment.merge(self.stored_environments[self.current_instruction.id])
-                     is_reexecuting = True
+		    #print self.current_instruction.id
+		    if self.current_instruction.mnemonic != 'EIF':
+		        if not len(self.environment.program_stack) == len(self.stored_environments[self.current_instruction.id]):
+			    print 'this function does not work!'
+			    sys.exit()
+			else:
+		            self.environment.merge(self.stored_environments[self.current_instruction.id])
+                            is_reexecuting = True
                 else:
                     self.stored_environments[self.current_instruction.id] = copy.deepcopy(self.environment)
            
+
+
 	    if self.current_instruction.mnemonic == 'JROT' or self.current_instruction.mnemonic == 'JROF' or self.current_instruction.mnemonic == 'JMPR':
+		logger.info("     program_stack is %s" % (str(map(lambda s:s.eval(False), self.environment.program_stack))))
+
+                if self.current_instruction.mnemonic == 'JMPR' and self.current_instruction.successors[0].mnemonic == 'EIF':
+			sys.exit()
+			self.current_instruction.vest = self.current_instruction.successors[0]
+			continue
+
                 if self.current_instruction.mnemonic == 'JROT' or self.current_instruction.mnemonic == 'JROF':
                     e = self.environment.program_stack_pop().eval(self.environment.keep_abstract)
                 else:
                     e = None
                 dest = self.environment.program_stack_pop().eval(False)
-                callee=self.call_stack[-1][0]
-                instructions_list=self.bytecodeContainer.function_table[callee].instructions
+		instructions_list = program.body.instructions
+		if len(self.call_stack) > 0:
+                    callee=self.call_stack[-1][0]
+                    instructions_list=self.bytecodeContainer.function_table[callee].instructions
                 branch_succ = self.environment.adjust_succ_for_relative_jump(self.current_instruction, dest, self.current_instruction.mnemonic,self.if_else_stack,self.ignored_insts,instructions_list,self.bytecode2ir,self)
                 logger.info("     adjusted succs now %s", self.current_instruction.successors)
-                if not is_reexecuting:
+		if not is_reexecuting:
                     # first time round at this JROT/JROF statement...
                     logger.info("executing %s with dest %s, cond %s, stack height is %d, program_stack is %s" % (self.current_instruction.mnemonic, branch_succ, str(e), self.stack_depth(), str(self.environment.program_stack)))
                     assert not isinstance(dest, dataType.AbstractValue)
@@ -1678,11 +2202,9 @@ class Executor(object):
                         self.breadcrumbs.append(branch_succ)
                         self.breadcrumbs_if_else_stack.append(if_else_stack_copy)
                         logger.info("putting %s in stored_environments; breadcrumb count %d" % (str(branch_succ.id), len(self.breadcrumbs)))
-            
 	    ir.extend(self.environment.execute_current_instruction(self.current_instruction))
             if self.stack_depth() > self.maximum_stack_depth:
                 self.maximum_stack_depth = self.stack_depth()
-
             self.setIRForBytecode(self.current_instruction, ir)
             
             # normal case: 1 succ
@@ -1728,8 +2250,45 @@ class Executor(object):
 			    ## merge the environement at anytime executing 'EIF' or 'ELSE',except the first time of
 			    ## 'ELSE' for ELSE mode, or the first time of 'EIF' for IF mode correspondingly 
 		       	    if  self.if_else_stack[-1].state == len(self.if_else_stack[-1].if_stmt.successors):
-                                self.if_else_stack[-1].env_on_exit.merge(self.environment)
-			        #self.environment.merge(self.if_else_stack[-1].env_on_exit)
+				if len(self.if_else_stack[-1].env_on_exit.program_stack) == len(self.environment.program_stack):
+                                    self.if_else_stack[-1].env_on_exit.merge(self.environment)
+			        else:
+				    print 'if block stack:',(str(map(lambda s:s.eval(False), self.if_else_stack[-1].env_on_exit.program_stack)))
+				    print 'else block stack:',(str(map(lambda s:s.eval(False), self.environment.program_stack)))
+				    print 'len of stacks:',len(self.if_else_stack[-1].env_on_exit.program_stack),len(self.environment.program_stack)
+				    print 'this function does not work,restore executor status...'
+				    if self.uncertain_callee_backup == None:
+					print "wrong"
+					sys.exit()
+					return
+                                    self.environment = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.environment)
+                                    self.if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.if_else_stack)
+                                    for i in range(0,len(self.if_else_stack)):
+                                        self.if_else_stack[i].if_stmt.successors = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.successors
+                                        self.if_else_stack[i].if_stmt.predecessor = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.predecessor
+
+				    self.current_instruction = self.uncertain_callee_backup.backup_executor_status.current_instruction
+                                    self.maximum_stack_depth = self.uncertain_callee_backup.backup_executor_status.maximum_stack_depth
+                                    self.call_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack)
+				    
+    
+                                    for i in range(0,len(self.uncertain_callee_backup.backup_executor_status.call_stack)):
+
+                                       new_if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack[i][8])
+
+                                       for j in range(0,len(new_if_else_stack)):
+                                           new_if_else_stack[j].if_stmt = self.uncertain_callee_backup.backup_executor_status.call_stack[i][8][j].if_stmt
+
+                                       oldtuple = self.call_stack[i]
+                                       newtuple = (oldtuple[0],self.uncertain_callee_backup.backup_executor_status.call_stack[i][1],self.uncertain_callee_backup.backup_executor_status.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+                                       self.call_stack[i] = newtuple
+
+				    self.visited_functions = self.uncertain_callee_backup.backup_executor_status.visited_functions
+                                    self.bytecode2ir = self.uncertain_callee_backup.backup_executor_status.bytecode2ir
+                                    self.already_seen_insts = self.uncertain_callee_backup.backup_executor_status.already_seen_insts
+			            self.uncertain_callee_backup.function_itr += 1 
+				    continue
+				#self.environment.merge(self.if_else_stack[-1].env_on_exit)
 
 
 			## restore the environement to corresponding IF instruction,only if first time executing 
@@ -1756,7 +2315,6 @@ class Executor(object):
 		    else:
 			self.if_else_stack.pop()
 	                for inst in block.loop_instructions:
-			    print 'in return loop:',inst
 			    if inst.mnemonic == 'IF':
 				block.loop_ir.append(inst.If_Else_Block)
 			    else:
@@ -1770,8 +2328,19 @@ class Executor(object):
  			    	block.else_ir.extend(self.bytecode2ir[inst.id])
 			    	#self.ignored_insts.add(inst)
 
-			self.current_instruction = self.current_instruction.successors[0]
+                        if len(self.if_else_stack) > 0 and self.current_instruction.if_block_layer == None:
+			    nested_block = self.if_else_stack[-1].IR
+			    if isinstance(nested_block,IR.IfElseBlock):
+			       if nested_block.mode == 'ELSE':
+			           nested_block.else_instructions.append(self.current_instruction.loop_stmt)
+			       else:
+				   nested_block.if_instructions.append(self.current_instruction.loop_stmt)
+                            elif isinstance(nested_block,IR.LoopBlock):
+			        pass
 
+
+			self.current_instruction = self.current_instruction.successors[0]
+                            
 		  
 
                 else:
@@ -1802,6 +2371,8 @@ class Executor(object):
 				 if inst.mnemonic == 'IF':
 					if(inst.id != s.if_stmt.id):
 					   block.if_branch.append(inst.If_Else_Block)
+				 elif inst.mnemonic == 'LOOP':
+					block.if_branch.append(inst.LOOP_BLOCK)
 				 else:
 					block.if_branch.extend(self.bytecode2ir[inst.id])
 				 if inst.id != s.if_stmt.id:
@@ -1812,6 +2383,8 @@ class Executor(object):
 			      if not inst in self.ignored_insts:
 				 if inst.mnemonic == 'IF':
 					block.else_branch.append(inst.If_Else_Block)
+				 elif inst.mnemonic == 'LOOP':
+				         block.else_branch.append(inst.LOOP_BLOCK)
 				 else:
                                  	block.else_branch.extend(self.bytecode2ir[inst.id])
                                  self.ignored_insts.add(inst)
@@ -1821,7 +2394,7 @@ class Executor(object):
                              ir = [block]
 			     ## when poping off an if-else-block from the stack, if this is a nested one
 			     ## append its IR to the parent if/else block
-			     if len(self.if_else_stack)>0:
+			     if len(self.if_else_stack)>0 and self.current_instruction.if_block_layer == None:
 				nested_block = self.if_else_stack[-1].IR
 				if nested_block.mode == 'ELSE':
 					nested_block.else_instructions.append(self.current_instruction)
@@ -1859,11 +2432,91 @@ class Executor(object):
                 # ok, we really are all done here!
                 else:
                     logger.info("leftovers if_else.env %d" % len(self.if_else_stack))
-                    assert len(self.if_else_stack)==0
-                    self.current_instruction = None
-	# ok, finished executing tag, now let's lift all of the IR into intermediateCodes
-        intermediateCodes = self.graphics_state_initialization_code() if tag == 'prep' else []
+                    if len(self.if_else_stack) > 0:
+			print 'check point..........'
+                        s = self.if_else_stack.pop()
+                        block = s.IR
+                        for inst in block.if_instructions:
+                        # only append inst which is not in ignored list, (for remove the unnecessary jump instructions)
+                            if not inst in self.ignored_insts:
+                                ## An IF instruction should not be in the ignored list
+                                ## or the whole If_Else_Block will not show up in the intermediate code
+                                if inst.mnemonic == 'IF':
+                                    if(inst.id != s.if_stmt.id):
+                                        block.if_branch.append(inst.If_Else_Block)
+                                elif inst.mnemonic == 'LOOP':
+                                    block.if_branch.append(inst.LOOP_BLOCK)
+                                else:
+                                    block.if_branch.extend(self.bytecode2ir[inst.id])
+                                    if inst.id != s.if_stmt.id:
+                                        self.ignored_insts.add(inst)
 
+                        for inst in block.else_instructions:
+                            # only append inst which is not in ignored list, (for remove the unnecessary jump instructions)
+                            if not inst in self.ignored_insts:
+                                if inst.mnemonic == 'IF':
+                                    block.else_branch.append(inst.If_Else_Block)
+                                elif inst.mnemonic == 'LOOP':
+                                    block.else_branch.append(inst.LOOP_BLOCK)
+                                else:
+                                    block.else_branch.extend(self.bytecode2ir[inst.id])
+                                self.ignored_insts.add(inst)
+
+                        block.if_instructions = []
+                        block.else_instructions = []
+                        ir = [block]
+                        ## when poping off an if-else-block from the stack, if this is a nested one
+                        ## append its IR to the parent if/else block
+                        if len(self.if_else_stack)>0 and self.current_instruction.if_block_layer == None:
+                            nested_block = self.if_else_stack[-1].IR
+                            if nested_block.mode == 'ELSE':
+                                nested_block.else_instructions.append(self.current_instruction)
+                            else:
+                                nested_block.if_instructions.append(self.current_instruction)
+                        ## add this in order to make the program keep going when quiting IF block and the whole IF
+                        ##_ELSE block
+
+                    assert len(self.if_else_stack)==0
+		    if not self.uncertain_callee_backup is None and self.current_instruction.id.startswith(tag):
+			print 'this function works'
+			self.uncertain_callee_backup.possible_functions.append(self.uncertain_callee_backup.function_itr)
+                        self.environment = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.environment)
+                        self.if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.if_else_stack)
+                        for i in range(0,len(self.if_else_stack)):
+                              self.if_else_stack[i].if_stmt.successors = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.successors
+                              self.if_else_stack[i].if_stmt.predecessor = self.uncertain_callee_backup.backup_executor_status.if_else_stack[i].if_stmt.predecessor
+
+                        self.current_instruction = self.uncertain_callee_backup.backup_executor_status.current_instruction
+                        self.maximum_stack_depth = self.uncertain_callee_backup.backup_executor_status.maximum_stack_depth
+                        self.call_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack)
+                        for i in range(0,len(self.uncertain_callee_backup.backup_executor_status.call_stack)):
+
+                           new_if_else_stack = copy.deepcopy(self.uncertain_callee_backup.backup_executor_status.call_stack[i][8])
+
+                           for j in range(0,len(new_if_else_stack)):
+                               new_if_else_stack[j].if_stmt = self.uncertain_callee_backup.backup_executor_status.call_stack[i][8][j].if_stmt
+
+                           oldtuple = self.call_stack[i]
+                           newtuple = (oldtuple[0],self.uncertain_callee_backup.backup_executor_status.call_stack[i][1],self.uncertain_callee_backup.backup_executor_status.call_stack[i][2],oldtuple[3],oldtuple[4],oldtuple[5],oldtuple[6],oldtuple[7],new_if_else_stack,oldtuple[9])
+                           self.call_stack[i] = newtuple
+
+
+                        self.visited_functions = self.uncertain_callee_backup.backup_executor_status.visited_functions
+                        self.bytecode2ir = self.uncertain_callee_backup.backup_executor_status.bytecode2ir
+                        self.already_seen_insts = self.uncertain_callee_backup.backup_executor_status.already_seen_insts
+                        self.uncertain_callee_backup.function_itr += 1
+                        continue
+		    
+
+
+		    self.current_instruction = None
+
+
+	# ok, finished executing tag, now let's lift all of the IR into intermediateCodes
+
+
+        intermediateCodes = self.graphics_state_initialization_code() if tag == 'prep' else []
+	
         for inst in program.body.instructions:
             if inst not in self.ignored_insts:
                 intermediateCodes.extend(self.bytecode2ir[inst.id])

@@ -20,6 +20,10 @@ class UncertainValue(AbstractValue):
     def __repr__(self):
         return str(self.possibleValues)
 
+class EF2Dot14(AbstractValue):
+    def __init__(self,value=None):
+        self.value = value
+
 class F26Dot6(AbstractValue):
     def __init__(self, value=None):
         self.value = value

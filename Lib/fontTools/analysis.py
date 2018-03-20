@@ -49,7 +49,21 @@ def ttDump(input):
 
 def executeGlyphs(abstractExecutor, initialEnvironment, glyphs):
     called_functions = set()
+    i = 1
     for glyph in glyphs:
+	print('executing glyph:', glyph,len(glyphs),i)
+	#if i in [37,50,54,55,56,58,59,60,62,74,83,93,114,115,150,153,154,155,1006,1022,1027,1028]:
+        # not implemented 115 1031 1151 1153 1231 1247 1248 1251 1252 1293 1358 1381 1419 1465 1468 1530 1537 817
+        #835 849 852 502 535 573 581 583 591 599 607
+        # assertion 153 1394 808 918 582 585 586 594 596 598 602
+        # pop from empty set 1006 1109 1150 1248 1363 1379 1525 824 825 826 843 917 945 963 971 983 533 576 609 610
+        # list index outof range(jump) 153 154 155 1022,1028,1039,1040 1384 902 961 554
+        # callee function not defined:1279 1318 1342 1423 836 587 608
+        # exec_delta assertion error: 810
+        if not i == 8:
+	    i += 1
+            continue
+	i += 1
         abstractExecutor.environment = copy.deepcopy(initialEnvironment)
         abstractExecutor.execute(glyph)
         called_functions.update(list(set(abstractExecutor.visited_functions)))
@@ -58,6 +72,11 @@ def executeGlyphs(abstractExecutor, initialEnvironment, glyphs):
 def analysis(bytecodeContainer, glyphs):
     abstractExecutor = abstractExecute.Executor(bytecodeContainer)
     called_functions = set()
+    #for key in bytecodeContainer.function_table.keys():
+    #	if len(bytecodeContainer.function_table[key].body.instructions)>0:
+    #	    print (bytecodeContainer.function_table[key].body.instructions[0].id,key)
+    #	    print (bytecodeContainer.function_table[key].body.instructions,'\n')
+    #sys.exit()
     if 'prep' in bytecodeContainer.tag_to_programs:
         abstractExecutor.execute('prep')
         called_functions.update(list(set(abstractExecutor.visited_functions)))
@@ -163,7 +182,8 @@ def process(jobs, options):
                     value.body.pretty_print()
                 print ()
         if (options.outputGlyfPrograms):
-            for glyph in glyphs:
+	    
+            for glyph in bc.IRs.keys():
                 print ("%s:" % glyph)
                 if (options.outputIR):
                     bc.print_IR(bc.IRs[glyph])

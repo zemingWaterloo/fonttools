@@ -1,4 +1,5 @@
 from instructions import statements, instructionConstructor, abstractExecute, IntermediateCode
+import sys
 
 class BytecodeContainer(object):
     class Label(object):
@@ -40,22 +41,27 @@ class BytecodeContainer(object):
                     parent_instruction.id = program_tag + '.' + str(counter[0])
                     instructions_list.append(parent_instruction)
                     counter[0] += 1
-		    print parent_instruction.id
             parent_instruction = None
             instructions_list = []
             for i in instructions:
                 instructionCons = instructionConstructor.instructionConstructor(i)
                 instruction = instructionCons.getClass()
-
                 if isinstance(instruction, instructionConstructor.Data):
                     parent_instruction.add_data(instruction)
-                else:
+                else: 
                     append_instruction(instruction)
                     parent_instruction = instruction
 
             append_instruction(parent_instruction)
-            return instructions_list
-        
+	    ## attach an ENDF statement to the end of each glyph program 
+	    if program_tag.startswith('glyf.'):
+		endf_statement = statements.all.ENDF_Statement()
+		endf_statement.id = program_tag + '.' + str(counter[0])
+		instructions_list.append(endf_statement)
+
+	    return instructions_list
+
+
         def add_tags_with_bytecode(tt,tag):
             for key in tt.keys():
                 if hasattr(tt[key], 'program'):
@@ -64,9 +70,9 @@ class BytecodeContainer(object):
                     else:
                         program_tag = key
                     self.tag_to_programs[program_tag] = constructInstructions(program_tag, tt[key].program.getAssembly())
+		    
                 if hasattr(tt[key], 'keys'):
                     add_tags_with_bytecode(tt[key],tag+key)
-
         # preprocess the function definition instructions between <fpgm></fpgm>
         def extract_functions():
             if('fpgm' in self.tag_to_programs.keys()):
@@ -295,10 +301,12 @@ class Body(object):
                 this_if = pending_if_stack[-1]
                 this_if.add_successor(this_instruction)
                 this_instruction.set_predecessor(this_if)
+		this_instruction.IF = this_if
             elif isinstance(this_instruction,statements.all.EIF_Statement):
                 this_if = pending_if_stack[-1]
                 this_if.add_successor(this_instruction)
                 this_instruction.set_predecessor(this_if)
+		this_instruction.IF = this_if
                 pending_if_stack.pop()
         return self.instructions[0]
 
